@@ -9,11 +9,14 @@
 
     <!-- For Companion Service to run in Foreground -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Permissions for ServerSocket -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Permissions for NsdService -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -43,7 +46,7 @@
         </receiver>
 
         <!-- Companion Service -->
-        <service android:name=".CompanionService" android:foregroundServiceType="mediaProjection" />
+        <service android:name=".CompanionService" android:foregroundServiceType="specialUse" />
     </application>
 
 </manifest>
