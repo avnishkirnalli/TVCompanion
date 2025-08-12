@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -55,7 +56,7 @@ public class MainActivity extends AppCompatActivity {
                     result -> {
                         if (result.getResultCode() != RESULT_OK) {
                             Toast.makeText(this, "Overlay Permission is needed to use app!", Toast.LENGTH_SHORT).show();
-                            requestOverlayPermission();
+                            finish();
                         }
                     }
             );

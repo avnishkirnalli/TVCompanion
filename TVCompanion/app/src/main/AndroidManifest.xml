@@ -4,7 +4,6 @@
 
     <!-- Permissions for receiving broadcast when device starts -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.ACTION_MANAGE_OVERLAY_PERMISSION" />
 
     <!-- For Companion Service to run in Foreground -->
@@ -17,6 +16,9 @@
 
     <!-- Permissions for NsdService -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- For ScreenStreamingService -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="true"
@@ -47,6 +49,7 @@
 
         <!-- Companion Service -->
         <service android:name=".CompanionService" android:foregroundServiceType="specialUse" />
+        <service android:name=".ScreenStreamingService" android:foregroundServiceType="specialUse" />
     </application>
 
 </manifest>
