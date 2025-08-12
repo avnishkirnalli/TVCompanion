@@ -6,7 +6,9 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.PixelFormat;
+import android.os.Binder;
 import android.os.IBinder;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,51 +17,35 @@ import android.view.WindowManager;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+
 public class ScreenStreamingService extends Service {
-    private static final int NOTIFICATION_ID = 1008;
+    private static final String TAG = "ScreenStreamingService";
+
+    private final IBinder binder = new LocalBinder();
 
     private WindowManager windowManager;
     private View overlayView;
     private boolean isStreaming = false;
 
+    // Actual Streaming
+    private ServerSocket socket;
+    private Socket clientSocket;
+
     @Override
     public void onCreate() {
         super.onCreate();
-
-        createNotificationChannel();
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && intent.getAction() != null) {
-            String action = intent.getAction();
-            switch (action) {
-                case "START_OVERLAY":
-                    startForeground(NOTIFICATION_ID, createNotification());
-                    showOverlay();
-                    break;
-                case "STOP_OVERLAY":
-                    hideOverlay();
-                    stopSelf();
-                    break;
-            }
-        }
-
-        return START_REDELIVER_INTENT;
-    }
-
-    private void createNotificationChannel() {
-        NotificationChannel channel = new NotificationChannel(
-                "OVERLAY_CHANNEL",
-                "Screen Overlay Service",
-                NotificationManager.IMPORTANCE_LOW
-        );
-        channel.setDescription("Displays overlay indicator while streaming");
-
-        NotificationManager notificationManager = getSystemService(NotificationManager.class);
-        notificationManager.createNotificationChannel(channel);
+        return START_STICKY;
     }
 
     private void showOverlay() {
@@ -98,18 +84,76 @@ public class ScreenStreamingService extends Service {
         windowManager.addView(overlayView, params);
     }
 
-    private Notification createNotification() {
-        // Create a simple notification for the foreground service
-        return new NotificationCompat.Builder(this, "OVERLAY_CHANNEL")
-                .setContentTitle("Screen Overlay Active")
-                .setContentText("Overlay is currently displayed")
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .build();
+    public int startStreaming() {
+        try {
+            int port = startServerSocket();
+            Log.d(TAG, "ScreenStreamingService listening on Local Port: " + port);
+            return port;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    private int startServerSocket() throws IOException {
+        socket = new ServerSocket(9876); //0); // Choose next available port
+        int port = socket.getLocalPort();
+        new Thread(() -> {
+            try {
+                clientSocket = socket.accept();
+                Log.d(TAG, "Client Connected!");
+                while (!clientSocket.isClosed()) {
+                    sendStreamFrame();
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }).start();
+        return port;
+    }
+
+    private void sendStreamFrame() {
+        try {
+            DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
+            out.writeUTF("Test Data");
+            out.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void stopStreaming() {
+        try {
+            if (socket != null && !socket.isClosed()) {
+                Log.d(TAG, "Stopping Screen Streaming");
+                clientSocket.close();
+                socket.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        Log.d(TAG, "ScreenStreamingService being Destroyed");
+        super.onDestroy();
     }
 
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        return binder;
+    }
+
+    public class LocalBinder extends Binder {
+        public ScreenStreamingService getService() {
+            return ScreenStreamingService.this;
+        }
     }
 }
