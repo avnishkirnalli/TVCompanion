@@ -23,47 +23,43 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+// This service will only exist when a stream is active.
 public class ScreenStreamingService extends Service {
     private static final String TAG = "ScreenStreamingService";
 
+    public class LocalBinder extends Binder {
+        public ScreenStreamingService getService() {
+            return ScreenStreamingService.this;
+        }
+    }
+
     private final IBinder binder = new LocalBinder();
 
+    // Overlay
     private WindowManager windowManager;
     private View overlayView;
-    private boolean isStreaming = false;
-
-    // Actual Streaming
-    private ServerSocket socket;
-    private Socket clientSocket;
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
     }
 
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        showOverlay();
+        return binder;
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        hideOverlay();
+        return super.onUnbind(intent);
+    }
+
     private void showOverlay() {
-        if (!isStreaming) {
-            createOverlay();
-            isStreaming = true;
-        }
-    }
-
-    private void hideOverlay() {
-        if (isStreaming && overlayView != null) {
-            windowManager.removeView(overlayView);
-            isStreaming = false;
-        }
-    }
-
-    private void createOverlay() {
-        // Inflate your custom overlay layout
+        // Inflate custom overlay layout
         overlayView = LayoutInflater.from(this).inflate(R.layout.recording_overlay, null);
 
         // Set up window parameters
@@ -84,76 +80,17 @@ public class ScreenStreamingService extends Service {
         windowManager.addView(overlayView, params);
     }
 
-    public int startStreaming() {
-        try {
-            int port = startServerSocket();
-            Log.d(TAG, "ScreenStreamingService listening on Local Port: " + port);
-            return port;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return -1;
+    private void hideOverlay() {
+        if (overlayView != null) {
+            windowManager.removeView(overlayView);
         }
     }
 
-    private int startServerSocket() throws IOException {
-        socket = new ServerSocket(9876); //0); // Choose next available port
-        int port = socket.getLocalPort();
-        new Thread(() -> {
-            try {
-                clientSocket = socket.accept();
-                Log.d(TAG, "Client Connected!");
-                while (!clientSocket.isClosed()) {
-                    sendStreamFrame();
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }).start();
-        return port;
+    private void startStreaming() {
+        Log.d(TAG, "Starting Stream");
     }
 
-    private void sendStreamFrame() {
-        try {
-            DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
-            out.writeUTF("Test Data");
-            out.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void stopStreaming() {
-        try {
-            if (socket != null && !socket.isClosed()) {
-                Log.d(TAG, "Stopping Screen Streaming");
-                clientSocket.close();
-                socket.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public void onDestroy() {
-        Log.d(TAG, "ScreenStreamingService being Destroyed");
-        super.onDestroy();
-    }
-
-    @Nullable
-    @Override
-    public IBinder onBind(Intent intent) {
-        return binder;
-    }
-
-    public class LocalBinder extends Binder {
-        public ScreenStreamingService getService() {
-            return ScreenStreamingService.this;
-        }
+    private void stopStreaming() {
+        Log.d(TAG, "Stopping Stream");
     }
 }

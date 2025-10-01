@@ -19,6 +19,7 @@
 
     <!-- For ScreenStreamingService -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <application
         android:allowBackup="true"
@@ -49,7 +50,7 @@
 
         <!-- Companion Service -->
         <service android:name=".CompanionService" android:foregroundServiceType="specialUse" />
-        <service android:name=".ScreenStreamingService" android:foregroundServiceType="specialUse" />
+        <service android:name=".ScreenStreamingService" android:foregroundServiceType="mediaProjection" />
     </application>
 
 </manifest>

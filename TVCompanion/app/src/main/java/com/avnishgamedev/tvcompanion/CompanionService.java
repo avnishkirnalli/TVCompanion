@@ -207,10 +207,9 @@ public class CompanionService extends Service {
                         e.printStackTrace();
                     }
                 }
-                return String.valueOf(screenStreamingService.startStreaming());
+                return "ack";
             case "stop_stream":
                 if (streamingBound) {
-                    screenStreamingService.stopStreaming();
                     unbindService(connection);
                     streamingBound = false;
                     return "ack";
