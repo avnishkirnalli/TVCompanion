@@ -1,21 +1,35 @@
 package com.avnishgamedev.tvcompanion;
 
+import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
+
+import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.hardware.display.VirtualDisplay;
 import android.media.AudioManager;
+import android.media.MediaCodec;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
+import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
+import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -53,14 +67,34 @@ public class CompanionService extends Service {
         }
     };
 
+    // MediaProjection
+    public static final String ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT = "com.avnishgamedev.tvcompanion.ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT";
+    private BroadcastReceiver mediaProjectionPermissionReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT.equals(intent.getAction())) {
+                int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
+                if (resultCode == Activity.RESULT_OK) {
+                    Intent permissionData = intent.getParcelableExtra("data");
+                    Intent streamIntent = new Intent(CompanionService.this, ScreenStreamingService.class);
+                    streamIntent.putExtra("resultCode", resultCode);
+                    streamIntent.putExtra("data", permissionData);
+                    startForegroundService(streamIntent);
+                    bindService(streamIntent, connection, BIND_AUTO_CREATE);
+                }
+            }
+        }
+    };
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
         startForegroundService();
 
         initializeRegistrationListener();
 
         startCompanionSocket();
+
+        registerMediaProjectionPermissionsListener();
 
         return START_STICKY;
     }
@@ -194,19 +228,18 @@ public class CompanionService extends Service {
             case "launch_url":
                 String url = data.split(" ")[1];
                 Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                browserIntent.addFlags(FLAG_ACTIVITY_NEW_TASK);
                 startActivity(browserIntent);
                 return "ack";
             case "start_stream":
-                Intent streamIntent = new Intent(this, ScreenStreamingService.class);
-                bindService(streamIntent, connection, BIND_AUTO_CREATE);
-                while (!streamingBound) {
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
+                requestMediaProjectionPermission();
+//                while (!streamingBound) {
+//                    try {
+//                        Thread.sleep(100);
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+//                }
                 return "ack";
             case "stop_stream":
                 if (streamingBound) {
@@ -218,9 +251,27 @@ public class CompanionService extends Service {
         return null;
     }
 
+    void registerMediaProjectionPermissionsListener() {
+        IntentFilter filter = new IntentFilter(ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT);
+        ContextCompat.registerReceiver(this, mediaProjectionPermissionReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
+
+    void requestMediaProjectionPermission() {
+        Intent i = new Intent(this, MediaProjectionSupportActivity.class);
+        i.setFlags(FLAG_ACTIVITY_NEW_TASK);
+        startActivity(i);
+    }
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+
+        unregisterReceiver(mediaProjectionPermissionReceiver);
     }
 }

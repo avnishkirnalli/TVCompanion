@@ -5,7 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
@@ -15,13 +18,6 @@ import android.view.View;
 import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
-import androidx.core.app.NotificationCompat;
-
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
 
 // This service will only exist when a stream is active.
 public class ScreenStreamingService extends Service {
@@ -39,8 +35,28 @@ public class ScreenStreamingService extends Service {
     private WindowManager windowManager;
     private View overlayView;
 
+    // MediaProjection
+    private MediaProjection mediaProjection;
+    private Thread streamThread;
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        NotificationChannel channel = new NotificationChannel(
+                "streaming_channel",
+                "Screen Streaming",
+                NotificationManager.IMPORTANCE_LOW
+        );
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.createNotificationChannel(channel);
+
+        Notification notification = new Notification.Builder(this, "streaming_channel")
+                .setContentTitle("Screen Streaming Active")
+                .setContentText("Streaming your screen")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .build();
+
+        startForeground(1, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
         return START_STICKY;
     }
 
@@ -49,12 +65,14 @@ public class ScreenStreamingService extends Service {
     public IBinder onBind(Intent intent) {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         showOverlay();
+        startStreaming(intent);
         return binder;
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         hideOverlay();
+        stopStreaming();
         return super.onUnbind(intent);
     }
 
@@ -86,11 +104,43 @@ public class ScreenStreamingService extends Service {
         }
     }
 
-    private void startStreaming() {
+    private void startStreaming(Intent data) {
         Log.d(TAG, "Starting Stream");
+
+        int resultCode = data.getIntExtra("resultCode", -1);
+        Intent permissionData = data.getParcelableExtra("data");
+
+        mediaProjection = getSystemService(MediaProjectionManager.class).getMediaProjection(resultCode, permissionData);
+        if (mediaProjection != null) {
+            Log.d(TAG, "MediaProjection Initialized!!!!");
+
+            mediaProjection.registerCallback(new MediaProjection.Callback() {
+                @Override
+                public void onCapturedContentResize(int width, int height) {
+                    super.onCapturedContentResize(width, height);
+                }
+            }, null);
+
+            // TODO: Initialize a Surface and mediaProjection.VirtualDisplay
+
+            streamThread = new Thread(() -> {
+                // TODO: Send Video frames to other device
+            });
+        }
     }
 
     private void stopStreaming() {
         Log.d(TAG, "Stopping Stream");
+
+        streamThread.interrupt();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+
+        if (mediaProjection != null) {
+            mediaProjection.stop();
+        }
     }
 }

@@ -40,6 +40,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".MediaProjectionSupportActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
         <!-- Receiver for when device starts -->
         <receiver android:name=".OnDeviceBootReceiver"
             android:exported="true">
