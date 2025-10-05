@@ -4,20 +4,34 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.content.res.Resources;
 import android.graphics.PixelFormat;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Binder;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
+
+import java.io.IOException;
+import java.net.DatagramSocket;
+import java.nio.ByteBuffer;
 
 // This service will only exist when a stream is active.
 public class ScreenStreamingService extends Service {
@@ -38,6 +52,12 @@ public class ScreenStreamingService extends Service {
     // MediaProjection
     private MediaProjection mediaProjection;
     private Thread streamThread;
+    private MediaCodec encoder;
+    private DatagramSocket udpSocket;
+    private RtpStreamer rtpStreamer;
+
+    private Handler mHandler;
+    private MediaProjection.Callback mMediaProjectionCallback;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -104,43 +124,142 @@ public class ScreenStreamingService extends Service {
         }
     }
 
+    private void createHandlerThread() {
+        HandlerThread handlerThread = new HandlerThread("MediaProjectionCallback");
+        handlerThread.start();
+        mHandler = new Handler(handlerThread.getLooper());
+    }
+
     private void startStreaming(Intent data) {
         Log.d(TAG, "Starting Stream");
 
         int resultCode = data.getIntExtra("resultCode", -1);
         Intent permissionData = data.getParcelableExtra("data");
 
-        mediaProjection = getSystemService(MediaProjectionManager.class).getMediaProjection(resultCode, permissionData);
+        MediaProjectionManager projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        mediaProjection = projectionManager.getMediaProjection(resultCode, permissionData);
+
         if (mediaProjection != null) {
-            Log.d(TAG, "MediaProjection Initialized!!!!");
-
-            mediaProjection.registerCallback(new MediaProjection.Callback() {
+            createHandlerThread();
+            mMediaProjectionCallback = new MediaProjection.Callback() {
                 @Override
-                public void onCapturedContentResize(int width, int height) {
-                    super.onCapturedContentResize(width, height);
+                public void onStop() {
+                    Log.w(TAG, "MediaProjection session stopped by user.");
+                    // This is critical. Trigger a clean shutdown.
+                    stopStreaming();
+                    stopSelf(); // Stops the service itself.
                 }
-            }, null);
+            };
+            mediaProjection.registerCallback(mMediaProjectionCallback, mHandler);
 
-            // TODO: Initialize a Surface and mediaProjection.VirtualDisplay
+            try {
+                setupEncoderAndVirtualDisplay();
 
-            streamThread = new Thread(() -> {
-                // TODO: Send Video frames to other device
-            });
+                // Initialize socket and streamer
+                udpSocket = new DatagramSocket();
+                rtpStreamer = new RtpStreamer("192.168.1.10", 5005, 30, udpSocket);
+
+                streamThread = new Thread(() -> {
+                    MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+                    while (!Thread.currentThread().isInterrupted()) {
+                        int outputBufferId = encoder.dequeueOutputBuffer(bufferInfo, 10000);
+                        if (outputBufferId >= 0) {
+                            ByteBuffer encodedData = encoder.getOutputBuffer(outputBufferId);
+                            if (encodedData != null) {
+                                // Position the buffer for reading
+                                encodedData.position(bufferInfo.offset);
+                                encodedData.limit(bufferInfo.offset + bufferInfo.size);
+
+                                try {
+                                    // Let the streamer handle all the complex logic
+                                    rtpStreamer.processBuffer(encodedData, bufferInfo);
+                                } catch (IOException e) {
+                                    Log.e(TAG, "Error sending RTP data", e);
+                                    break; // Stop streaming on error
+                                }
+                            }
+                            encoder.releaseOutputBuffer(outputBufferId, false);
+                        } else if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                            // No output buffer available yet
+                        }
+                    }
+                    // Cleanup
+                    releaseResources();
+                });
+                streamThread.start();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to start streaming", e);
+                stopSelf(); // Stop the service if setup fails
+            }
         }
+    }
+
+    private void setupEncoderAndVirtualDisplay() throws IOException {
+        int width = 1280;
+        int height = 720;
+        int dpi = Resources.getSystem().getDisplayMetrics().densityDpi;
+
+        encoder = MediaCodec.createEncoderByType("video/avc");
+        MediaFormat format = MediaFormat.createVideoFormat("video/avc", width, height);
+        format.setInteger(MediaFormat.KEY_BIT_RATE, 4000000);  // 4Mbps
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);  // key frame interval in seconds
+
+        // Set the H.264 profile to Baseline for maximum compatibility
+        format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline);
+
+        encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        Surface inputSurface = encoder.createInputSurface();
+        encoder.start();
+
+        VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
+                "ScreenCapture",
+                width,
+                height,
+                dpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                inputSurface,
+                null,
+                null);
     }
 
     private void stopStreaming() {
         Log.d(TAG, "Stopping Stream");
+        if (streamThread != null) {
+            streamThread.interrupt();
+        }
+    }
 
-        streamThread.interrupt();
+    private void releaseResources() {
+        if (mHandler != null) {
+            mHandler.getLooper().quitSafely();
+            mHandler = null;
+        }
+        if (udpSocket != null) {
+            udpSocket.close();
+            udpSocket = null;
+        }
+        if (encoder != null) {
+            encoder.stop();
+            encoder.release();
+            encoder = null;
+        }
+        // VirtualDisplay and MediaProjection are released in onDestroy/stopStreaming
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-
+        stopStreaming(); // Ensure thread is stopped
         if (mediaProjection != null) {
+            if (mMediaProjectionCallback != null) {
+                mediaProjection.unregisterCallback(mMediaProjectionCallback);
+                mMediaProjectionCallback = null;
+            }
             mediaProjection.stop();
+            mediaProjection = null;
         }
+        Log.d(TAG, "Service destroyed");
     }
 }
