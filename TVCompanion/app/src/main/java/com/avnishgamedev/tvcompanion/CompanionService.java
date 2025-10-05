@@ -47,6 +47,7 @@ public class CompanionService extends Service {
 
     private Thread socketThread;
     private ServerSocket serverSocket;
+    private Socket clientSocket; // Only valid if the client is connected
     private NsdManager.RegistrationListener registrationListener;
     boolean nsdRegistered = false;
 
@@ -79,6 +80,10 @@ public class CompanionService extends Service {
                     Intent streamIntent = new Intent(CompanionService.this, ScreenStreamingService.class);
                     streamIntent.putExtra("resultCode", resultCode);
                     streamIntent.putExtra("data", permissionData);
+                    if (clientSocket != null) {
+                        String destIP = clientSocket.getInetAddress().toString().substring(1);
+                        streamIntent.putExtra("ip", destIP);
+                    }
                     startForegroundService(streamIntent);
                     bindService(streamIntent, connection, BIND_AUTO_CREATE);
                 }
@@ -173,8 +178,8 @@ public class CompanionService extends Service {
                 Log.d(TAG, "CompanionService listening on Local Port: " + localPort);
                 registerNsdService(localPort);
                 Log.d(TAG, "ServerSocket initialized! Listening for client connections");
-                Socket clientSocket = serverSocket.accept();
-                Log.d(TAG, "Client Connected!");
+                clientSocket = serverSocket.accept();
+                Log.d(TAG, "Client Connected! " + clientSocket.getInetAddress().toString().substring(1)); // Start from 2nd char to remove '/'
                 DataInputStream in = new DataInputStream(clientSocket.getInputStream());
                 DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
                 while (true) {
@@ -233,13 +238,6 @@ public class CompanionService extends Service {
                 return "ack";
             case "start_stream":
                 requestMediaProjectionPermission();
-//                while (!streamingBound) {
-//                    try {
-//                        Thread.sleep(100);
-//                    } catch (InterruptedException e) {
-//                        e.printStackTrace();
-//                    }
-//                }
                 return "ack";
             case "stop_stream":
                 if (streamingBound) {

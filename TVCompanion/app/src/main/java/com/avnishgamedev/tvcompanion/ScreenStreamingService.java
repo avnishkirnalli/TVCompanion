@@ -86,6 +86,7 @@ public class ScreenStreamingService extends Service {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         showOverlay();
         startStreaming(intent);
+        Log.d(TAG, "Service bound");
         return binder;
     }
 
@@ -93,6 +94,8 @@ public class ScreenStreamingService extends Service {
     public boolean onUnbind(Intent intent) {
         hideOverlay();
         stopStreaming();
+        stopSelf();
+        Log.d(TAG, "Service unbound");
         return super.onUnbind(intent);
     }
 
@@ -157,34 +160,36 @@ public class ScreenStreamingService extends Service {
 
                 // Initialize socket and streamer
                 udpSocket = new DatagramSocket();
-                rtpStreamer = new RtpStreamer("192.168.1.10", 5005, 30, udpSocket);
+                rtpStreamer = new RtpStreamer(data.getStringExtra("ip"), 5005, 30, udpSocket);
 
                 streamThread = new Thread(() -> {
                     MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
                     while (!Thread.currentThread().isInterrupted()) {
-                        int outputBufferId = encoder.dequeueOutputBuffer(bufferInfo, 10000);
-                        if (outputBufferId >= 0) {
-                            ByteBuffer encodedData = encoder.getOutputBuffer(outputBufferId);
-                            if (encodedData != null) {
-                                // Position the buffer for reading
-                                encodedData.position(bufferInfo.offset);
-                                encodedData.limit(bufferInfo.offset + bufferInfo.size);
+                        try {
+                            int outputBufferId = encoder.dequeueOutputBuffer(bufferInfo, 10000);
+                            if (outputBufferId >= 0) {
+                                ByteBuffer encodedData = encoder.getOutputBuffer(outputBufferId);
+                                if (encodedData != null) {
+                                    // Position the buffer for reading
+                                    encodedData.position(bufferInfo.offset);
+                                    encodedData.limit(bufferInfo.offset + bufferInfo.size);
 
-                                try {
-                                    // Let the streamer handle all the complex logic
-                                    rtpStreamer.processBuffer(encodedData, bufferInfo);
-                                } catch (IOException e) {
-                                    Log.e(TAG, "Error sending RTP data", e);
-                                    break; // Stop streaming on error
+                                    try {
+                                        // Let the streamer handle all the complex logic
+                                        rtpStreamer.processBuffer(encodedData, bufferInfo);
+                                    } catch (IOException e) {
+                                        Log.e(TAG, "Error sending RTP data", e);
+                                        break; // Stop streaming on error
+                                    }
                                 }
+                                encoder.releaseOutputBuffer(outputBufferId, false);
+                            } else if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                                // No output buffer available yet
                             }
-                            encoder.releaseOutputBuffer(outputBufferId, false);
-                        } else if (outputBufferId == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                            // No output buffer available yet
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
                     }
-                    // Cleanup
-                    releaseResources();
                 });
                 streamThread.start();
             } catch (Exception e) {
@@ -229,9 +234,6 @@ public class ScreenStreamingService extends Service {
         if (streamThread != null) {
             streamThread.interrupt();
         }
-    }
-
-    private void releaseResources() {
         if (mHandler != null) {
             mHandler.getLooper().quitSafely();
             mHandler = null;
@@ -245,13 +247,6 @@ public class ScreenStreamingService extends Service {
             encoder.release();
             encoder = null;
         }
-        // VirtualDisplay and MediaProjection are released in onDestroy/stopStreaming
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        stopStreaming(); // Ensure thread is stopped
         if (mediaProjection != null) {
             if (mMediaProjectionCallback != null) {
                 mediaProjection.unregisterCallback(mMediaProjectionCallback);
@@ -260,6 +255,13 @@ public class ScreenStreamingService extends Service {
             mediaProjection.stop();
             mediaProjection = null;
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        stopStreaming(); // Ensure thread is stopped
+
         Log.d(TAG, "Service destroyed");
     }
 }
