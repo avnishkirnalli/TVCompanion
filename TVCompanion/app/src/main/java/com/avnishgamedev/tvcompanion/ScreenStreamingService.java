@@ -22,6 +22,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -112,7 +113,7 @@ public class ScreenStreamingService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        //showOverlay();
+        showOverlay();
         startStreaming(intent);
         Log.d(TAG, "Service bound");
         return binder;
@@ -120,7 +121,7 @@ public class ScreenStreamingService extends Service {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        //hideOverlay();
+        hideOverlay();
         stopStreaming();
         stopSelf();
         Log.d(TAG, "Service unbound");
@@ -128,6 +129,14 @@ public class ScreenStreamingService extends Service {
     }
 
     private void showOverlay() {
+        // Check if we have permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Log.w(TAG, "No overlay permission - skipping overlay");
+                return;
+            }
+        }
+
         // Inflate custom overlay layout
         overlayView = LayoutInflater.from(this).inflate(R.layout.recording_overlay, null);
 
@@ -381,7 +390,6 @@ public class ScreenStreamingService extends Service {
 
         return false;
     }
-
 
     private void stopStreaming() {
         Log.d(TAG, "Stopping Stream");
