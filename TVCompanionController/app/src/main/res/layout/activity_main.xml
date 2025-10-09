@@ -23,10 +23,21 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="2dp"
                 android:text="TV Companion Controller"
                 android:textColor="#8080FF"
                 android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="2dp"
+                android:layout_marginLeft="100dp"
+                android:text="by Avnish Kirnalli"
+                android:textColor="#8080FF"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <Button
@@ -34,7 +45,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:text="Volume Up" />
 
             <Button
@@ -42,7 +53,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:text="Volume Down" />
 
             <Button
@@ -50,7 +61,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:text="Start Stream" />
 
             <Button
@@ -58,13 +69,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:text="Stop Stream" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:orientation="horizontal">
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -95,16 +106,17 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:orientation="horizontal">
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:hint="URL">
 
-                    <com.google.android.material.textfield.TextInputEditText
+                    <AutoCompleteTextView
                         android:id="@+id/etUrl"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -112,22 +124,33 @@
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <Space
-                    android:layout_width="16dp"
+                    android:layout_width="8dp"
+                    android:layout_height="match_parent" />
+
+                <Button
+                    android:id="@+id/btnAddUrl"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="+" />
+
+                <Space
+                    android:layout_width="8dp"
                     android:layout_height="match_parent" />
 
                 <Button
                     android:id="@+id/btnLaunchUrl"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Launch URL" />
+                    android:text="Launch" />
 
             </LinearLayout>
+
 
             <!-- Compact Video Display -->
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="5dp"
                 android:background="#000000">
 
                 <SurfaceView

@@ -1,6 +1,7 @@
 package com.avnishgamedev.tvcompanioncontroller;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
@@ -8,6 +9,8 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -16,11 +19,16 @@ import android.widget.RelativeLayout;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
     private static final String TAG = "MainActivity";
@@ -46,10 +54,18 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     Button btnStopStream;
     EditText etVolume;
     Button btnSetVolume;
+    Button btnAddUrl;
     Button btnLaunchUrl;
-    EditText etUrl;
+    AutoCompleteTextView etUrl;
     SurfaceView surfaceView;
     ProgressBar progressBar;
+
+    // URL List
+    ArrayList<String> urlList;
+    ArrayAdapter<String> urlAdapter;
+    SharedPreferences prefs;
+    private static final String KEY_URLS = "saved_urls";
+    private static final String PREFS_NAME = "TVCompanionPrefs";
 
     // RTP Streaming
     private RTPReceiver rtpReceiver;
@@ -88,8 +104,9 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
         etUrl = findViewById(R.id.etUrl);
 
+        btnAddUrl = findViewById(R.id.btnAddUrl);
+
         btnLaunchUrl = findViewById(R.id.btnLaunchUrl);
-        btnLaunchUrl.setOnClickListener(v -> sendCommand("launch_url " + etUrl.getText().toString()));
 
         btnStartStream = findViewById(R.id.btnStartStream);
         btnStartStream.setOnClickListener(v -> {
@@ -102,6 +119,74 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
             sendCommand("stop_stream");
             stopVideoStream();
         });
+
+        // Initialize SharedPreferences
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        // Load saved URLs
+        urlList = getUrlList();
+        if (urlList == null) {
+            urlList = new ArrayList<>();
+        }
+
+        // Setup adapter for dropdown
+        urlAdapter = new ArrayAdapter<>(this,
+                R.layout.dropdown_item, urlList);
+        etUrl.setAdapter(urlAdapter);
+
+        // Add URL button click
+        btnAddUrl.setOnClickListener(v -> {
+                String newUrl = etUrl.getText().toString().trim();
+                if (!newUrl.isEmpty()) {
+                    if (!urlList.contains(newUrl)) {
+                        urlList.add(newUrl);
+                        urlAdapter.notifyDataSetChanged();
+                        saveUrlList(urlList);
+                        Toast.makeText(MainActivity.this,
+                                "URL saved", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(MainActivity.this,
+                                "URL already exists", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(MainActivity.this,
+                            "Please enter a URL", Toast.LENGTH_SHORT).show();
+                }
+        });
+
+        btnLaunchUrl.setOnClickListener(v -> {
+                String selectedUrl = etUrl.getText().toString().trim();
+                if (!selectedUrl.isEmpty()) {
+                    Toast.makeText(MainActivity.this,
+                            "Launching: " + selectedUrl, Toast.LENGTH_SHORT).show();
+                    sendCommand("launch_url " + selectedUrl);
+                } else {
+                    Toast.makeText(MainActivity.this,
+                            "Please select or enter a URL", Toast.LENGTH_SHORT).show();
+                }
+        });
+
+        // Show dropdown when clicked
+        etUrl.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus && !urlList.isEmpty()) {
+                etUrl.showDropDown();
+            }
+        });
+    }
+
+    private void saveUrlList(ArrayList<String> list) {
+        SharedPreferences.Editor editor = prefs.edit();
+        Gson gson = new Gson();
+        String json = gson.toJson(list);
+        editor.putString(KEY_URLS, json);
+        editor.apply();
+    }
+
+    private ArrayList<String> getUrlList() {
+        Gson gson = new Gson();
+        String json = prefs.getString(KEY_URLS, null);
+        Type type = new TypeToken<ArrayList<String>>() {}.getType();
+        return gson.fromJson(json, type);
     }
 
     // SurfaceHolder.Callback methods
