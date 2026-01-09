@@ -13,21 +13,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.hardware.display.VirtualDisplay;
 import android.media.AudioManager;
-import android.media.MediaCodec;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
-import android.net.nsd.NsdManager;
-import android.net.nsd.NsdServiceInfo;
-import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
 import android.util.Log;
 
-import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
@@ -43,13 +33,11 @@ public class CompanionService extends Service {
     private static final String TAG = "CompanionService";
 
     private String serviceName = "TVCompanionService";
-    private int localPort = 8080; //0; TEMP
+    private int localPort = 0; // Get next available port
 
     private Thread socketThread;
     private ServerSocket serverSocket;
     private Socket clientSocket; // Only valid if the client is connected
-    private NsdManager.RegistrationListener registrationListener;
-    boolean nsdRegistered = false;
 
     // Streaming
     private ScreenStreamingService screenStreamingService;
@@ -91,15 +79,33 @@ public class CompanionService extends Service {
         }
     };
 
+    // NSD (Network Service Discovery)
+    NsdHelperService nsdHelperService;
+    private final ServiceConnection nsdConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            NsdHelperService.LocalBinder b = (NsdHelperService.LocalBinder) iBinder;
+            nsdHelperService = b.getService();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            nsdHelperService = null;
+        }
+    };
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundService();
 
-        initializeRegistrationListener();
-
-        startCompanionSocket();
+        startCompanionSocket(); // Sets localPort
 
         registerMediaProjectionPermissionsListener();
+
+        // Create and bind to NsdHelperService
+        Intent nsdIntent = new Intent(CompanionService.this, NsdHelperService.class);
+        nsdIntent.putExtra("port", localPort);
+        bindService(nsdIntent, nsdConnection, Context.BIND_AUTO_CREATE);
 
         return START_STICKY;
     }
@@ -121,51 +127,6 @@ public class CompanionService extends Service {
         startForeground(1001, notification.build());
     }
 
-    public void initializeRegistrationListener() {
-        registrationListener = new NsdManager.RegistrationListener() {
-
-            @Override
-            public void onServiceRegistered(NsdServiceInfo NsdServiceInfo) {
-                // Save the service name. Android may have changed it in order to
-                // resolve a conflict, so update the name you initially requested
-                // with the name Android actually used.
-                serviceName = NsdServiceInfo.getServiceName();
-            }
-
-            @Override
-            public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                // Registration failed! Put debugging code here to determine why.
-                Log.e(TAG, "NSD Registration Failed: " + errorCode);
-            }
-
-            @Override
-            public void onServiceUnregistered(NsdServiceInfo arg0) {
-                // Service has been unregistered. This only happens when you call
-                // NsdManager.unregisterService() and pass in this listener.
-            }
-
-            @Override
-            public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                // Unregistration failed. Put debugging code here to determine why.
-                // I don't want this to ever be unregistered
-            }
-        };
-    }
-
-    private void registerNsdService(int port) {
-        if (!nsdRegistered) {
-            NsdServiceInfo serviceInfo = new NsdServiceInfo();
-            serviceInfo.setServiceName(serviceName);
-            serviceInfo.setServiceType("_http._tcp.");
-            serviceInfo.setPort(port);
-
-            NsdManager nsdManager = (NsdManager) getBaseContext().getSystemService(Context.NSD_SERVICE);
-            nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener);
-
-            nsdRegistered = true;
-        }
-    }
-
     private void startCompanionSocket() {
         if (socketThread != null) {
             socketThread.interrupt();
@@ -176,7 +137,6 @@ public class CompanionService extends Service {
                 serverSocket = new ServerSocket(localPort); // 0 = Get next available port
                 localPort = serverSocket.getLocalPort();
                 Log.d(TAG, "CompanionService listening on Local Port: " + localPort);
-                registerNsdService(localPort);
                 Log.d(TAG, "ServerSocket initialized! Listening for client connections");
                 clientSocket = serverSocket.accept();
                 Log.d(TAG, "Client Connected! " + clientSocket.getInetAddress().toString().substring(1)); // Start from 2nd char to remove '/'
@@ -271,5 +231,6 @@ public class CompanionService extends Service {
         super.onDestroy();
 
         unregisterReceiver(mediaProjectionPermissionReceiver);
+        unbindService(nsdConnection);
     }
 }

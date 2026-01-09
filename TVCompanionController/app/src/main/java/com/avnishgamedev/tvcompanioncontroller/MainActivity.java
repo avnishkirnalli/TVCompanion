@@ -32,7 +32,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
     private static final String TAG = "MainActivity";
-    private static final String SERVICE_TYPE = "_http._tcp.";
+    private static final String SERVICE_TYPE = "_tvcompanion._tcp";
 
     // Video dimensions
     private static final int VIDEO_WIDTH = 1280;
