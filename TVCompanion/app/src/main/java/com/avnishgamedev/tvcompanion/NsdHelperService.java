@@ -23,7 +23,7 @@ public class NsdHelperService extends Service {
     }
 
     // NSD
-    private static final String SERVICE_TYPE = "_tvcompanion._tcp";
+    private static final String SERVICE_TYPE = "_tvcompanion._tcp.";
     private NsdManager nsdManager;
     boolean nsdRegistered = false;
     private final NsdManager.RegistrationListener regListener = new NsdManager.RegistrationListener() {
@@ -56,23 +56,26 @@ public class NsdHelperService extends Service {
     }
 
     private void startAdvertising(int port) {
-        NsdServiceInfo serviceInfo = new NsdServiceInfo();
-        serviceInfo.setServiceName(Build.MODEL); // Model of the device
-        serviceInfo.setServiceType(SERVICE_TYPE);
-        serviceInfo.setPort(port);
+        if (!nsdRegistered) {
+            NsdServiceInfo serviceInfo = new NsdServiceInfo();
+            serviceInfo.setServiceName(Build.MODEL); // Model of the device
+            serviceInfo.setServiceType(SERVICE_TYPE);
+            serviceInfo.setPort(port);
 
-        Log.d(TAG, "Service Name: " + Build.MODEL);
-        Log.d(TAG, "Service Type: " + SERVICE_TYPE);
-        Log.d(TAG, "Service Port: " + port);
+            Log.d(TAG, "Service Name: " + Build.MODEL);
+            Log.d(TAG, "Service Type: " + SERVICE_TYPE);
+            Log.d(TAG, "Service Port: " + port);
 
-        nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, regListener);
+            nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, regListener);
+        }
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
 
-        nsdManager.unregisterService(regListener);
+        if (nsdRegistered)
+            nsdManager.unregisterService(regListener);
 
         Log.d(TAG, "NsdHelperService destroyed");
     }
