@@ -11,6 +11,10 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+/**
+ * This service is used for advertising the host to be found by the controller.
+ * It is bound to by the CompanionService and destroyed when the CompanionService is destroyed.
+ */
 public class NsdHelperService extends Service {
     private static final String TAG = "NsdHelperService";
 

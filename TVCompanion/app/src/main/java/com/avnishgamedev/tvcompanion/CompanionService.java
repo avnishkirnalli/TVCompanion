@@ -29,58 +29,27 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 
+
+/**
+ * This is the main service of TV Companion which acts as the host.
+ * It is responsible for:
+ * 1. Opening the ServerSocket and listening for connections.
+ * 2. Receiving commands from controller and parsing them.
+ * 3. Executing commands from controller.
+ * 4. Starting/Stopping other services as needed (ScreenStreamingService)
+ * 5. Starting up NsdHelperService to advertise the service.
+ */
 public class CompanionService extends Service {
     private static final String TAG = "CompanionService";
 
-    private String serviceName = "TVCompanionService";
-    private int localPort = 0; // Get next available port
-
+    // ServerSocket Thread
+    private int localPort = 8080; // 0; // Get next available port
     private Thread socketThread;
     private ServerSocket serverSocket;
     private Socket clientSocket; // Only valid if the client is connected
 
-    // Streaming
-    private ScreenStreamingService screenStreamingService;
-    private boolean streamingBound = false;
-    private ServiceConnection connection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            ScreenStreamingService.LocalBinder binder = (ScreenStreamingService.LocalBinder) iBinder;
-            screenStreamingService = binder.getService();
-            streamingBound = true;
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-            streamingBound = false;
-        }
-    };
-
-    // MediaProjection
-    public static final String ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT = "com.avnishgamedev.tvcompanion.ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT";
-    private BroadcastReceiver mediaProjectionPermissionReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT.equals(intent.getAction())) {
-                int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
-                if (resultCode == Activity.RESULT_OK) {
-                    Intent permissionData = intent.getParcelableExtra("data");
-                    Intent streamIntent = new Intent(CompanionService.this, ScreenStreamingService.class);
-                    streamIntent.putExtra("resultCode", resultCode);
-                    streamIntent.putExtra("data", permissionData);
-                    if (clientSocket != null) {
-                        String destIP = clientSocket.getInetAddress().toString().substring(1);
-                        streamIntent.putExtra("ip", destIP);
-                    }
-                    startForegroundService(streamIntent);
-                    bindService(streamIntent, connection, BIND_AUTO_CREATE);
-                }
-            }
-        }
-    };
-
     // NSD (Network Service Discovery)
-    NsdHelperService nsdHelperService;
+    private NsdHelperService nsdHelperService; // Should be valid whenever the service is bound to it.
     private final ServiceConnection nsdConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
@@ -94,13 +63,27 @@ public class CompanionService extends Service {
         }
     };
 
+    // Screen Streaming
+    private ScreenStreamingService screenStreamingService; // Should be valid whenever the service is bound to it.
+    private final ServiceConnection screenStreamingConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            ScreenStreamingService.LocalBinder b = (ScreenStreamingService.LocalBinder) iBinder;
+            screenStreamingService = b.getService();
+        }
+        // The Android system calls this when the connection to the service is unexpectedly lost, such as when the service crashes or is killed. This is NOT called when the client unbinds.
+        // Hence, whenever we call unbindService, we set screenStreamingService to null explicitly.
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            screenStreamingService = null;
+        }
+    };
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundService();
 
         startCompanionSocket(); // Sets localPort
-
-        registerMediaProjectionPermissionsListener();
 
         // Create and bind to NsdHelperService
         Intent nsdIntent = new Intent(CompanionService.this, NsdHelperService.class);
@@ -177,18 +160,17 @@ public class CompanionService extends Service {
     }
 
     private String processCommand(String data) {
-        AudioManager audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         String command = data.split(" ")[0];
         switch (command) {
             case "volume_up":
-                audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_PLAY_SOUND);
+                ((AudioManager) getSystemService(AUDIO_SERVICE)).adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_PLAY_SOUND);
                 return "ack";
             case "volume_down":
-                audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_PLAY_SOUND);
+                ((AudioManager) getSystemService(AUDIO_SERVICE)).adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_PLAY_SOUND);
                 return "ack";
             case "volume_set":
                 String volumePercentage = data.split(" ")[1];
-                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (int)((((float)Integer.parseInt(volumePercentage) / 100f)) * ((float)audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC))), AudioManager.FLAG_PLAY_SOUND);
+                ((AudioManager) getSystemService(AUDIO_SERVICE)).setStreamVolume(AudioManager.STREAM_MUSIC, (int)((((float)Integer.parseInt(volumePercentage) / 100f)) * ((float)((AudioManager) getSystemService(AUDIO_SERVICE)).getStreamMaxVolume(AudioManager.STREAM_MUSIC))), AudioManager.FLAG_PLAY_SOUND);
                 return "ack";
             case "launch_url":
                 String url = data.split(" ")[1];
@@ -197,27 +179,22 @@ public class CompanionService extends Service {
                 startActivity(browserIntent);
                 return "ack";
             case "start_stream":
-                requestMediaProjectionPermission();
+                if (screenStreamingService == null) {
+                    String streamPort = data.split(" ")[1];
+                    Intent streamIntent = new Intent(CompanionService.this, ScreenStreamingService.class);
+                    streamIntent.putExtra("client_ip", clientSocket.getInetAddress().toString().substring(1)); // substring to get rid of prefixed "/"
+                    streamIntent.putExtra("client_port", Integer.parseInt(streamPort));
+                    bindService(streamIntent, screenStreamingConnection, Context.BIND_AUTO_CREATE);
+                }
                 return "ack";
             case "stop_stream":
-                if (streamingBound) {
-                    unbindService(connection);
-                    streamingBound = false;
-                    return "ack";
-                }
+                if (screenStreamingService != null)
+                    unbindService(screenStreamingConnection);
+                screenStreamingService = null;
+                return "ack";
+            default:
+                return "noack";
         }
-        return null;
-    }
-
-    void registerMediaProjectionPermissionsListener() {
-        IntentFilter filter = new IntentFilter(ACTION_MEDIA_PROJECTION_PERMISSIONS_RESULT);
-        ContextCompat.registerReceiver(this, mediaProjectionPermissionReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
-    }
-
-    void requestMediaProjectionPermission() {
-        Intent i = new Intent(this, MediaProjectionSupportActivity.class);
-        i.setFlags(FLAG_ACTIVITY_NEW_TASK);
-        startActivity(i);
     }
 
     @Nullable
@@ -229,8 +206,11 @@ public class CompanionService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-
-        unregisterReceiver(mediaProjectionPermissionReceiver);
-        unbindService(nsdConnection);
+        // OS destroys "purely bound services" itself
+        // when no components are bound to it.
+        if (nsdHelperService != null)
+            unbindService(nsdConnection);
+        if (screenStreamingService != null)
+            unbindService(screenStreamingConnection);
     }
 }
