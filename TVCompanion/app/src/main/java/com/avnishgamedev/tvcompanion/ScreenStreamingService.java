@@ -127,6 +127,9 @@ public class ScreenStreamingService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        // TODO: Release surface
+        virtualDisplay.release();
+        mediaProjection.stop();
         Log.d(TAG, "ScreenStreamingService destroyed");
     }
 
