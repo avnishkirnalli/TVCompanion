@@ -7,9 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.MediaCodec;
-import android.media.MediaCodecInfo;
-import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Binder;
@@ -21,15 +18,9 @@ import android.os.ResultReceiver;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
-import android.view.Surface;
 import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.Socket;
-import java.nio.ByteBuffer;
 
 /**
  * This service is used for streaming the screen to the controller.
@@ -51,16 +42,9 @@ public class ScreenStreamingService extends Service {
         void onFailure();
     }
 
-    private Socket s;
-    private Thread streamThread;
-
     // MediaProjection API
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
-
-    // MediaCodec API
-    private MediaCodec codec;
-    private Surface codecSurface;
 
     @Nullable
     @Override
@@ -71,32 +55,17 @@ public class ScreenStreamingService extends Service {
                 new MediaProjectionPermissionCallback() {
                     @Override
                     public void onSuccess(Intent data) {
-                        // TODO: Workout the flow of MediaProjection to Stream, then implement.
                         createMediaProjectionFromPermissionData(data);
-                        createMediaCodec();
                         createVirtualDisplay();
-                        startStreaming();
+                        // TODO: Supply a surface to the Virtual Display
+                        // TODO: Figure out how to stream the screen to the controller
                     }
                     @Override
                     public void onFailure() {
-                        // TODO: Tell the controller
+                        // TODO: Tell the controller that permission wasn't granted
                     }
                 }
         );
-
-        String IP = intent.getStringExtra("client_ip");
-        int port = intent.getIntExtra("client_port", 0);
-
-        Log.d(TAG, "Client IP: " + IP);
-        Log.d(TAG, "Client Port: " + port);
-
-        new Thread(() -> {
-            try {
-                s = new Socket(IP, port);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }).start();
 
         return binder;
     }
@@ -133,93 +102,31 @@ public class ScreenStreamingService extends Service {
         final MediaProjectionManager mediaProjectionManager = getSystemService(MediaProjectionManager.class);
         mediaProjection = mediaProjectionManager.getMediaProjection(RESULT_OK, data); // RESULT_OK because permission was granted.
 
-        MediaProjection.Callback callback = new MediaProjection.Callback() {
-            @Override
-            public void onCapturedContentResize(int width, int height) {
-                super.onCapturedContentResize(width, height);
-            }
-        };
+        // A callback must be registered, otherwise it crashes
+        MediaProjection.Callback callback = new MediaProjection.Callback() {};
         mediaProjection.registerCallback(callback, null);
     }
 
-    private void createMediaCodec() {
-        try {
-            codec = MediaCodec.createEncoderByType("video/avc");
-
-            final DisplayMetrics displayMetrics = getActualDisplayMetrics();
-            MediaFormat format = MediaFormat.createVideoFormat("video/avc", displayMetrics.widthPixels, displayMetrics.heightPixels);
-            format.setInteger(MediaFormat.KEY_BIT_RATE, 10000);
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5);
-
-            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-            codecSurface = codec.createInputSurface();
-
-            codec.start();
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to create MediaCodec: " + e);
-        }
-    }
-
     private void createVirtualDisplay() {
-        VirtualDisplay.Callback callback = new VirtualDisplay.Callback() {
-            @Override
-            public void onPaused() {
-                super.onPaused();
-            }
-        };
+        // A callback must be registered, otherwise it crashes
+        VirtualDisplay.Callback callback = new VirtualDisplay.Callback() {};
 
         final DisplayMetrics displayMetrics = getActualDisplayMetrics();
         virtualDisplay = mediaProjection.createVirtualDisplay(
                 "ScreenCapture",
-                displayMetrics.widthPixels,
-                displayMetrics.heightPixels,
+                1280,
+                720,
                 displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                codecSurface,
+                null, // TODO
                 callback,
                 null
         );
     }
 
-    private void startStreaming() {
-        streamThread = new Thread(() -> {
-            try {
-                MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-                OutputStream out = s.getOutputStream();
-
-                while (true) {
-                    int index = codec.dequeueOutputBuffer(info, 0);
-                    if (index >= 0) {
-                        ByteBuffer buffer = codec.getOutputBuffer(index);
-
-                        byte[] data = new byte[info.size];
-                        buffer.get(data);
-
-                        out.write(data);
-                        out.flush();
-
-                        codec.releaseOutputBuffer(index, false);
-                    }
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        streamThread.start();
-    }
-
     @Override
     public void onDestroy() {
         super.onDestroy();
-        new Thread(() -> {
-            try {
-                s.close();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }).start();
         Log.d(TAG, "ScreenStreamingService destroyed");
     }
 
