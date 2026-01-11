@@ -53,6 +53,7 @@
         <!-- TV Companion Services -->
         <service android:name=".CompanionService" android:foregroundServiceType="mediaProjection" />
         <service android:name=".ScreenStreamingService" />
+        <service android:name=".NsdHelperService" />
     </application>
 
 </manifest>
