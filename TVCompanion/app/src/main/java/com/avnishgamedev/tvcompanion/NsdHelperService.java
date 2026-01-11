@@ -66,10 +66,7 @@ public class NsdHelperService extends Service {
             serviceInfo.setServiceType(SERVICE_TYPE);
             serviceInfo.setPort(port);
 
-            Log.d(TAG, "Service Name: " + Build.MODEL);
-            Log.d(TAG, "Service Type: " + SERVICE_TYPE);
-            Log.d(TAG, "Service Port: " + port);
-
+            Log.d(TAG, "Service Info: Name: " + Build.MODEL + ", Type: " + SERVICE_TYPE + ", Port: " + port);
             nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, regListener);
         }
     }

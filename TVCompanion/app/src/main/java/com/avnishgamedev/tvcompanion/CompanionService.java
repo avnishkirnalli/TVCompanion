@@ -28,6 +28,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.concurrent.Callable;
+import java.util.function.Consumer;
 
 
 /**
@@ -43,7 +45,6 @@ public class CompanionService extends Service {
     private static final String TAG = "CompanionService";
 
     // ServerSocket Thread
-    private int localPort = 8080; // 0; // Get next available port
     private Thread socketThread;
     private ServerSocket serverSocket;
     private Socket clientSocket; // Only valid if the client is connected
@@ -83,12 +84,7 @@ public class CompanionService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundService();
 
-        startCompanionSocket(); // Sets localPort
-
-        // Create and bind to NsdHelperService
-        Intent nsdIntent = new Intent(CompanionService.this, NsdHelperService.class);
-        nsdIntent.putExtra("port", localPort);
-        bindService(nsdIntent, nsdConnection, Context.BIND_AUTO_CREATE);
+        startCompanionSocket();
 
         return START_STICKY;
     }
@@ -111,44 +107,39 @@ public class CompanionService extends Service {
     }
 
     private void startCompanionSocket() {
+        // Close the previous socket thread if it exists
         if (socketThread != null) {
             socketThread.interrupt();
             socketThread = null;
         }
         socketThread = new Thread(() -> {
             try {
-                serverSocket = new ServerSocket(localPort); // 0 = Get next available port
-                localPort = serverSocket.getLocalPort();
-                Log.d(TAG, "CompanionService listening on Local Port: " + localPort);
+                serverSocket = new ServerSocket(0); // 0 = Get next available port
+                setNsdPort(serverSocket.getLocalPort()); // Start/Restart NSD with assigned port
+
+                Log.d(TAG, "CompanionService listening on Local Port: " + serverSocket.getLocalPort());
                 Log.d(TAG, "ServerSocket initialized! Listening for client connections");
+
+                // Wait for controller to connect
                 clientSocket = serverSocket.accept();
                 Log.d(TAG, "Client Connected! " + clientSocket.getInetAddress().toString().substring(1)); // Start from 2nd char to remove '/'
+
                 DataInputStream in = new DataInputStream(clientSocket.getInputStream());
                 DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
+
+                // Until client disconnects (when socket throws exception)
                 while (true) {
-                    String data = in.readUTF();
+                    String data = in.readUTF(); // Wait for command
                     Log.d(TAG, "Received Data from client: " + data);
 
-                    if (data.equals("end")) {
-                        break;
-                    }
+                    String response = processCommand(data); // Process command and get response
 
-                    String response = processCommand(data);
-
-                    out.writeUTF(response == null ? "noack" : response);
+                    out.writeUTF(response);
                 }
-                Log.d(TAG, "Client Disconnected!");
-                in.close();
-                out.close();
-                clientSocket.close();
-                serverSocket.close();
-
-                Log.d(TAG, "Restarting ServerSocket");
-                startCompanionSocket();
             } catch (IOException e) {
                 if (e instanceof EOFException || e instanceof SocketException) {
                     // Client Disconnect or Connection Reset
-                    try { serverSocket.close(); } catch (IOException e1) {}
+                    try { serverSocket.close(); clientSocket.close(); } catch (IOException ignored) {}
                     Log.d(TAG, "Client Disconnected. Restarting ServerSocket");
                     startCompanionSocket();
                     return;
@@ -157,6 +148,15 @@ public class CompanionService extends Service {
             }
         });
         socketThread.start();
+    }
+
+    private void setNsdPort(int port) {
+        if (nsdHelperService != null)
+            unbindService(nsdConnection);
+
+        Intent nsdIntent = new Intent(CompanionService.this, NsdHelperService.class);
+        nsdIntent.putExtra("port", port);
+        bindService(nsdIntent, nsdConnection, Context.BIND_AUTO_CREATE);
     }
 
     private String processCommand(String data) {
@@ -180,10 +180,7 @@ public class CompanionService extends Service {
                 return "ack";
             case "start_stream":
                 if (screenStreamingService == null) {
-                    String streamPort = data.split(" ")[1];
                     Intent streamIntent = new Intent(CompanionService.this, ScreenStreamingService.class);
-                    streamIntent.putExtra("client_ip", clientSocket.getInetAddress().toString().substring(1)); // substring to get rid of prefixed "/"
-                    streamIntent.putExtra("client_port", Integer.parseInt(streamPort));
                     bindService(streamIntent, screenStreamingConnection, Context.BIND_AUTO_CREATE);
                 }
                 return "ack";
