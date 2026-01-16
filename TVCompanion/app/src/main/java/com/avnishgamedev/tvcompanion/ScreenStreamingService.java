@@ -2,14 +2,18 @@ package com.avnishgamedev.tvcompanion;
 
 import static android.app.Activity.RESULT_OK;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
-import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -18,56 +22,108 @@ import android.os.ResultReceiver;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
+import android.view.Surface;
 import android.view.WindowManager;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
 
-/**
- * This service is used for streaming the screen to the controller.
- * It is bound to by the CompanionService, but started after receiving the start_stream command
- * and destroyed after receiving the stop_stream command or when CompanionService is destroyed.
- */
+import com.pedro.common.ConnectChecker;
+
 public class ScreenStreamingService extends Service {
+    public static final String ACTION_STREAM_STARTED = "com.avnishgamedev.tvcompanion.STREAM_STARTED";
+    public static final String ACTION_STREAM_STOPPED = "com.avnishgamedev.tvcompanion.STREAM_STOPPED";
+    public static final String EXTRA_STREAM_PORT = "com.avnishgamedev.tvcompanion.EXTRA_STREAM_PORT";
     private static final String TAG = "ScreenStreamingService";
+    private static final String CHANNEL_ID = "ScreenStreamingServiceChannel";
+    private static final int NOTIFICATION_ID = 1;
 
-    // For Binding
-    private final IBinder binder = new ScreenStreamingService.LocalBinder();
-    public class LocalBinder extends Binder {
-        ScreenStreamingService getService() {
-            return ScreenStreamingService.this;
-        }
-    }
     private interface MediaProjectionPermissionCallback {
         void onSuccess(Intent data);
         void onFailure();
     }
 
-    // MediaProjection API
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
+    private SurfaceRtspServer surfaceRtspServer;
+    private Surface inputSurface;
 
-    @Nullable
     @Override
-    public IBinder onBind(Intent intent) {
-        Log.d(TAG, "ScreenStreamingService bound");
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(TAG, "ScreenStreamingService starting...");
 
         getMediaProjectionPermission(
                 new MediaProjectionPermissionCallback() {
                     @Override
                     public void onSuccess(Intent data) {
+                        createNotificationChannel();
+                        Notification notification = new NotificationCompat.Builder(ScreenStreamingService.this, CHANNEL_ID)
+                                .setContentTitle("Screen Streaming Service")
+                                .setContentText("Streaming screen to controller.")
+                                .setSmallIcon(R.mipmap.ic_launcher)
+                                .build();
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+                        } else {
+                            startForeground(NOTIFICATION_ID, notification);
+                        }
+
                         createMediaProjectionFromPermissionData(data);
+                        initializeSurfaceRtspServer();
                         createVirtualDisplay();
-                        // TODO: Supply a surface to the Virtual Display
-                        // TODO: Figure out how to stream the screen to the controller
+
+                        Intent startedIntent = new Intent(ACTION_STREAM_STARTED);
+                        startedIntent.putExtra(EXTRA_STREAM_PORT, surfaceRtspServer.getPort());
+                        sendBroadcast(startedIntent);
+                        Log.d(TAG, "Stream started on port " + surfaceRtspServer.getPort() + ". Broadcast sent.");
                     }
+
                     @Override
                     public void onFailure() {
-                        // TODO: Tell the controller that permission wasn't granted
+                        Log.e(TAG, "Media projection permission denied. Stopping service.");
+                        stopSelf();
                     }
                 }
         );
 
-        return binder;
+        return START_NOT_STICKY;
+    }
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (surfaceRtspServer != null) {
+            surfaceRtspServer.stop();
+        }
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+        }
+        if (mediaProjection != null) {
+            mediaProjection.stop();
+        }
+
+        sendBroadcast(new Intent(ACTION_STREAM_STOPPED));
+        Log.d(TAG, "ScreenStreamingService destroyed and broadcast sent.");
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel serviceChannel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Screen Streaming Service Channel",
+                    NotificationManager.IMPORTANCE_DEFAULT
+            );
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(serviceChannel);
+        }
     }
 
     private void getMediaProjectionPermission(MediaProjectionPermissionCallback callback) {
@@ -75,12 +131,12 @@ public class ScreenStreamingService extends Service {
             @Override
             protected void onReceiveResult(int resultCode, Bundle resultData) {
                 super.onReceiveResult(resultCode, resultData);
-                // Check if Permission was granted
                 if (resultCode == RESULT_OK) {
                     Log.d(TAG, "MediaProjection Permission Granted");
-                    Intent data = resultData.getParcelable("data"); // Contains data gotten from the permission
+                    Intent data = resultData.getParcelable("data");
                     if (data == null) {
                         Log.e(TAG, "Invalid State: MediaProjection Permission data is null! But result code is ok!");
+                        callback.onFailure();
                         return;
                     }
                     callback.onSuccess(data);
@@ -97,43 +153,66 @@ public class ScreenStreamingService extends Service {
         startActivity(intent);
     }
 
-    // Called after MediaProjection permission is granted
     private void createMediaProjectionFromPermissionData(Intent data) {
         final MediaProjectionManager mediaProjectionManager = getSystemService(MediaProjectionManager.class);
-        mediaProjection = mediaProjectionManager.getMediaProjection(RESULT_OK, data); // RESULT_OK because permission was granted.
-
-        // A callback must be registered, otherwise it crashes
-        MediaProjection.Callback callback = new MediaProjection.Callback() {};
-        mediaProjection.registerCallback(callback, null);
+        mediaProjection = mediaProjectionManager.getMediaProjection(RESULT_OK, data);
+        mediaProjection.registerCallback(new MediaProjection.Callback() {},
+                null);
     }
 
     private void createVirtualDisplay() {
-        // A callback must be registered, otherwise it crashes
-        VirtualDisplay.Callback callback = new VirtualDisplay.Callback() {};
-
         final DisplayMetrics displayMetrics = getActualDisplayMetrics();
         virtualDisplay = mediaProjection.createVirtualDisplay(
                 "ScreenCapture",
-                1280,
-                720,
+                displayMetrics.widthPixels,
+                displayMetrics.heightPixels,
                 displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                null, // TODO
-                callback,
+                inputSurface,
+                new VirtualDisplay.Callback() {},
                 null
         );
     }
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        // TODO: Release surface
-        virtualDisplay.release();
-        mediaProjection.stop();
-        Log.d(TAG, "ScreenStreamingService destroyed");
+    private void initializeSurfaceRtspServer() {
+        surfaceRtspServer = new SurfaceRtspServer(this, 0, new ConnectChecker() {
+            @Override
+            public void onConnectionStarted(@NonNull String s) {
+            }
+
+            @Override
+            public void onConnectionSuccess() {
+                Log.d(TAG, "RTSP client connected.");
+            }
+
+            @Override
+            public void onConnectionFailed(@NonNull String reason) {
+                Log.w(TAG, "RTSP connection failed: " + reason);
+            }
+
+            @Override
+            public void onNewBitrate(long bitrate) {
+            }
+
+            @Override
+            public void onDisconnect() {
+                Log.d(TAG, "RTSP client disconnected. Stopping stream service.");
+                stopSelf();
+            }
+
+            @Override
+            public void onAuthError() {
+            }
+
+            @Override
+            public void onAuthSuccess() {
+            }
+        });
+        final DisplayMetrics displayMetrics = getActualDisplayMetrics();
+        surfaceRtspServer.start(displayMetrics.widthPixels, displayMetrics.heightPixels, 30, 3000 * 1024);
+        inputSurface = surfaceRtspServer.getInputSurface();
     }
 
-    // Helpers
     private DisplayMetrics getActualDisplayMetrics() {
         final WindowManager windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         final Display display = windowManager.getDefaultDisplay();

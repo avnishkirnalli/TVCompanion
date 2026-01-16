@@ -1,8 +1,5 @@
 package com.avnishgamedev.tvcompanion;
 
-import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
-
-import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -13,201 +10,168 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.media.AudioManager;
-import android.net.Uri;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
-import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 
-
-/**
- * This is the main service of TV Companion which acts as the host.
- * It is responsible for:
- * 1. Opening the ServerSocket and listening for connections.
- * 2. Receiving commands from controller and parsing them.
- * 3. Executing commands from controller.
- * 4. Starting/Stopping other services as needed (ScreenStreamingService)
- * 5. Starting up NsdHelperService to advertise the service.
- */
 public class CompanionService extends Service {
     private static final String TAG = "CompanionService";
 
-    // ServerSocket Thread
     private Thread socketThread;
     private ServerSocket serverSocket;
-    private Socket clientSocket; // Only valid if the client is connected
 
-    // NSD (Network Service Discovery)
-    private NsdHelperService nsdHelperService; // Should be valid whenever the service is bound to it.
+    private boolean isStreaming = false;
+
+    private NsdHelperService nsdHelperService;
     private final ServiceConnection nsdConnection = new ServiceConnection() {
         @Override
-        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            NsdHelperService.LocalBinder b = (NsdHelperService.LocalBinder) iBinder;
-            nsdHelperService = b.getService();
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            nsdHelperService = ((NsdHelperService.LocalBinder) service).getService();
         }
 
         @Override
-        public void onServiceDisconnected(ComponentName componentName) {
+        public void onServiceDisconnected(ComponentName name) {
             nsdHelperService = null;
-        }
-    };
-
-    // Screen Streaming
-    private ScreenStreamingService screenStreamingService; // Should be valid whenever the service is bound to it.
-    private final ServiceConnection screenStreamingConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            ScreenStreamingService.LocalBinder b = (ScreenStreamingService.LocalBinder) iBinder;
-            screenStreamingService = b.getService();
-        }
-        // The Android system calls this when the connection to the service is unexpectedly lost, such as when the service crashes or is killed. This is NOT called when the client unbinds.
-        // Hence, whenever we call unbindService, we set screenStreamingService to null explicitly.
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-            screenStreamingService = null;
         }
     };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundService();
-
         startCompanionSocket();
-
         return START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (socketThread != null) {
+            socketThread.interrupt();
+        }
+        if (isStreaming) {
+            stopService(new Intent(this, ScreenStreamingService.class));
+        }
+        if (nsdHelperService != null) {
+            unbindService(nsdConnection);
+        }
+        Log.d(TAG, "CompanionService destroyed.");
     }
 
     private void startForegroundService() {
         final String CHANNEL_ID = "Foreground Service ID";
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                CHANNEL_ID,
+                "TV Companion Control Service",
                 NotificationManager.IMPORTANCE_LOW
         );
-
         getSystemService(NotificationManager.class).createNotificationChannel(channel);
-        Notification.Builder notification = new Notification.Builder(this, CHANNEL_ID)
+        Notification notification = new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("TV Companion is active")
-                .setContentText("Companion Service is running")
-                .setSmallIcon(R.drawable.ic_launcher_foreground);
-
-        startForeground(1001, notification.build());
+                .setContentText("Ready for screen sharing commands.")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .build();
+        startForeground(1001, notification);
     }
 
     private void startCompanionSocket() {
-        // Close the previous socket thread if it exists
         if (socketThread != null) {
             socketThread.interrupt();
-            socketThread = null;
         }
         socketThread = new Thread(() -> {
             try {
-                serverSocket = new ServerSocket(0); // 0 = Get next available port
-                setNsdPort(serverSocket.getLocalPort()); // Start/Restart NSD with assigned port
+                serverSocket = new ServerSocket(0);
+                advertiseService(serverSocket.getLocalPort());
+                Log.d(TAG, "Control server listening on port: " + serverSocket.getLocalPort());
 
-                Log.d(TAG, "CompanionService listening on Local Port: " + serverSocket.getLocalPort());
-                Log.d(TAG, "ServerSocket initialized! Listening for client connections");
-
-                // Wait for controller to connect
-                clientSocket = serverSocket.accept();
-                Log.d(TAG, "Client Connected! " + clientSocket.getInetAddress().toString().substring(1)); // Start from 2nd char to remove '/'
-
-                DataInputStream in = new DataInputStream(clientSocket.getInputStream());
-                DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
-
-                // Until client disconnects (when socket throws exception)
-                while (true) {
-                    String data = in.readUTF(); // Wait for command
-                    Log.d(TAG, "Received Data from client: " + data);
-
-                    String response = processCommand(data); // Process command and get response
-
-                    out.writeUTF(response);
+                while (!Thread.currentThread().isInterrupted()) {
+                    Socket clientSocket = serverSocket.accept();
+                    Log.d(TAG, "Control client connected: " + clientSocket.getInetAddress());
+                    handleClient(clientSocket);
                 }
             } catch (IOException e) {
-                if (e instanceof EOFException || e instanceof SocketException) {
-                    // Client Disconnect or Connection Reset
-                    try { serverSocket.close(); clientSocket.close(); } catch (IOException ignored) {}
-                    Log.d(TAG, "Client Disconnected. Restarting ServerSocket");
-                    startCompanionSocket();
-                    return;
-                }
-                throw new RuntimeException(e);
+                Log.e(TAG, "Error in server socket", e);
+            } finally {
+                stopSelf();
             }
         });
         socketThread.start();
     }
 
-    private void setNsdPort(int port) {
-        if (nsdHelperService != null)
-            unbindService(nsdConnection);
+    private void handleClient(Socket clientSocket) {
+        BroadcastReceiver streamStartedReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (ScreenStreamingService.ACTION_STREAM_STARTED.equals(intent.getAction())) {
+                    int port = intent.getIntExtra(ScreenStreamingService.EXTRA_STREAM_PORT, -1);
+                    if (port != -1) {
+                        try (DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
+                            out.writeInt(port);
+                            Log.d(TAG, "Sent streaming port " + port + " to client.");
+                        } catch (IOException e) {
+                            Log.e(TAG, "Failed to send port to client.", e);
+                        }
+                    }
+                    unregisterReceiver(this);
+                }
+            }
+        };
 
-        Intent nsdIntent = new Intent(CompanionService.this, NsdHelperService.class);
-        nsdIntent.putExtra("port", port);
-        bindService(nsdIntent, nsdConnection, Context.BIND_AUTO_CREATE);
+        try {
+            if (!isStreaming) {
+                isStreaming = true;
+                IntentFilter filter = new IntentFilter(ScreenStreamingService.ACTION_STREAM_STARTED);
+                ContextCompat.registerReceiver(this, streamStartedReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+                startService(new Intent(this, ScreenStreamingService.class));
+                Log.d(TAG, "Requested to start ScreenStreamingService.");
+            }
+
+            // Keep the connection alive until it's closed by the client or an error occurs.
+            // A simple way to do this is to try reading from the input stream.
+            // When the client disconnects, read() will throw an exception.
+            //noinspection ResultOfMethodCallIgnored
+            clientSocket.getInputStream().read();
+
+        } catch (IOException e) {
+            Log.d(TAG, "Control client disconnected.");
+        } finally {
+            if (isStreaming) {
+                Log.d(TAG, "Client disconnected, stopping stream.");
+                stopService(new Intent(this, ScreenStreamingService.class));
+                isStreaming = false;
+            }
+            try {
+                unregisterReceiver(streamStartedReceiver);
+            } catch (IllegalArgumentException e) {
+                // Receiver might not have been registered if streaming was already active.
+            }
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                Log.e(TAG, "Error closing client socket", e);
+            }
+        }
     }
 
-    private String processCommand(String data) {
-        String command = data.split(" ")[0];
-        switch (command) {
-            case "volume_up":
-                ((AudioManager) getSystemService(AUDIO_SERVICE)).adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_PLAY_SOUND);
-                return "ack";
-            case "volume_down":
-                ((AudioManager) getSystemService(AUDIO_SERVICE)).adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_PLAY_SOUND);
-                return "ack";
-            case "volume_set":
-                String volumePercentage = data.split(" ")[1];
-                ((AudioManager) getSystemService(AUDIO_SERVICE)).setStreamVolume(AudioManager.STREAM_MUSIC, (int)((((float)Integer.parseInt(volumePercentage) / 100f)) * ((float)((AudioManager) getSystemService(AUDIO_SERVICE)).getStreamMaxVolume(AudioManager.STREAM_MUSIC))), AudioManager.FLAG_PLAY_SOUND);
-                return "ack";
-            case "launch_url":
-                String url = data.split(" ")[1];
-                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                browserIntent.addFlags(FLAG_ACTIVITY_NEW_TASK);
-                startActivity(browserIntent);
-                return "ack";
-            case "start_stream":
-                if (screenStreamingService == null) {
-                    Intent streamIntent = new Intent(CompanionService.this, ScreenStreamingService.class);
-                    bindService(streamIntent, screenStreamingConnection, Context.BIND_AUTO_CREATE);
-                }
-                return "ack";
-            case "stop_stream":
-                if (screenStreamingService != null)
-                    unbindService(screenStreamingConnection);
-                screenStreamingService = null;
-                return "ack";
-            default:
-                return "noack";
+    private void advertiseService(int port) {
+        if (nsdHelperService != null) {
+            unbindService(nsdConnection);
         }
+        Intent nsdIntent = new Intent(this, NsdHelperService.class);
+        nsdIntent.putExtra("port", port);
+        bindService(nsdIntent, nsdConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         return null;
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        // OS destroys "purely bound services" itself
-        // when no components are bound to it.
-        if (nsdHelperService != null)
-            unbindService(nsdConnection);
-        if (screenStreamingService != null)
-            unbindService(screenStreamingConnection);
     }
 }
