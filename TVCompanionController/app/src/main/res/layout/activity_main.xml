@@ -1,214 +1,240 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
-    <!-- Main Content -->
-    <ScrollView
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:layout_height="wrap_content"
+        android:fitsSystemWindows="true">
 
-        <LinearLayout
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:layout_height="?attr/actionBarSize"
+            app:title="@string/app_name" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="2dp"
-                android:text="TV Companion Controller"
-                android:textColor="#8080FF"
-                android:textSize="28sp"
-                android:textStyle="bold" />
+    </com.google.android.material.appbar.AppBarLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="2dp"
-                android:layout_marginLeft="100dp"
-                android:text="by Avnish Kirnalli"
-                android:textColor="#8080FF"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/btnVolumeUp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="5dp"
-                android:text="Volume Up" />
-
-            <Button
-                android:id="@+id/btnVolumeDown"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="5dp"
-                android:text="Volume Down" />
-
-            <Button
-                android:id="@+id/btnStartStream"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="5dp"
-                android:text="Start Stream" />
-
-            <Button
-                android:id="@+id/btnStopStream"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="5dp"
-                android:text="Stop Stream" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Volume">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etVolume"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="number" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Space
-                    android:layout_width="16dp"
-                    android:layout_height="match_parent" />
-
-                <Button
-                    android:id="@+id/btnSetVolume"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Set Volume" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="URL">
-
-                    <AutoCompleteTextView
-                        android:id="@+id/etUrl"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="textUri" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="match_parent" />
-
-                <Button
-                    android:id="@+id/btnAddUrl"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="+" />
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="match_parent" />
-
-                <Button
-                    android:id="@+id/btnLaunchUrl"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Launch" />
-
-            </LinearLayout>
-
-
-            <!-- Compact Video Display -->
-<!--            <RelativeLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:layout_marginTop="5dp"-->
-<!--                android:background="#000000">-->
-
-<!--                <SurfaceView-->
-<!--                    android:id="@+id/surfaceView"-->
-<!--                    android:layout_width="match_parent"-->
-<!--                    android:layout_height="200dp"-->
-<!--                    android:layout_centerInParent="true" />-->
-
-<!--                <ProgressBar-->
-<!--                    android:id="@+id/progressBar"-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_centerInParent="true"-->
-<!--                    android:visibility="gone" />-->
-
-<!--            </RelativeLayout>-->
-
-        </LinearLayout>
-
-    </ScrollView>
-
-    <!-- Loading Overlay -->
     <FrameLayout
-        android:id="@+id/loadingLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clickable="true"
-        android:elevation="10dp"
-        android:focusable="true"
-        android:visibility="gone">
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <View
+        <!-- Device Discovery View -->
+        <LinearLayout
+            android:id="@+id/deviceDiscoveryLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="#80000000" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <com.google.android.material.progressindicator.CircularProgressIndicator
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:indeterminate="true" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="visible">
 
             <TextView
+                android:id="@+id/discoveryStatusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:layout_marginBottom="16dp"
+                android:text="Searching for devices..."
+                android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/devicesRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                tools:listitem="@layout/device_list_item" />
+
+            <Button
+                android:id="@+id/scanButton"
+                style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="Discovering TV Companion..."
-                android:textColor="#FFFFFF"
-                android:textSize="16sp" />
-
+                android:text="Scan Again" />
         </LinearLayout>
 
-    </FrameLayout>
+        <!-- Remote Control View -->
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/remoteControlLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
 
-</FrameLayout>
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp">
+
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/dpad_card"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:cardElevation="4dp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:padding="24dp">
+
+                        <ImageButton
+                            android:id="@+id/dpad_up"
+                            style="@style/Widget.AppCompat.Button.Borderless"
+                            android:layout_width="72dp"
+                            android:layout_height="72dp"
+                            android:contentDescription="DPad Up"
+                            android:src="@drawable/ic_keyboard_arrow_up"
+                            app:layout_constraintBottom_toTopOf="@+id/dpad_center"
+                            app:layout_constraintEnd_toEndOf="@+id/dpad_center"
+                            app:layout_constraintStart_toStartOf="@+id/dpad_center" />
+
+                        <ImageButton
+                            android:id="@+id/dpad_down"
+                            style="@style/Widget.AppCompat.Button.Borderless"
+                            android:layout_width="72dp"
+                            android:layout_height="72dp"
+                            android:contentDescription="DPad Down"
+                            android:src="@drawable/ic_keyboard_arrow_down"
+                            app:layout_constraintEnd_toEndOf="@+id/dpad_center"
+                            app:layout_constraintStart_toStartOf="@+id/dpad_center"
+                            app:layout_constraintTop_toBottomOf="@+id/dpad_center" />
+
+                        <ImageButton
+                            android:id="@+id/dpad_left"
+                            style="@style/Widget.AppCompat.Button.Borderless"
+                            android:layout_width="72dp"
+                            android:layout_height="72dp"
+                            android:contentDescription="DPad Left"
+                            android:src="@drawable/ic_keyboard_arrow_left"
+                            app:layout_constraintBottom_toBottomOf="@+id/dpad_center"
+                            app:layout_constraintEnd_toStartOf="@+id/dpad_center"
+                            app:layout_constraintTop_toTopOf="@+id/dpad_center" />
+
+                        <ImageButton
+                            android:id="@+id/dpad_right"
+                            style="@style/Widget.AppCompat.Button.Borderless"
+                            android:layout_width="72dp"
+                            android:layout_height="72dp"
+                            android:contentDescription="DPad Right"
+                            android:src="@drawable/ic_keyboard_arrow_right"
+                            app:layout_constraintBottom_toBottomOf="@+id/dpad_center"
+                            app:layout_constraintStart_toEndOf="@+id/dpad_center"
+                            app:layout_constraintTop_toTopOf="@+id/dpad_center" />
+
+                        <ImageButton
+                            android:id="@+id/dpad_center"
+                            android:layout_width="72dp"
+                            android:layout_height="72dp"
+                            android:background="@drawable/dpad_center_background"
+                            android:contentDescription="DPad Center"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+
+                <LinearLayout
+                    android:id="@+id/middle_buttons"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@+id/dpad_card">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/back_button"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Back" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/home_button"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:text="Home" />
+
+                </LinearLayout>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/volume_card"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    app:cardElevation="4dp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/middle_buttons">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:padding="16dp">
+
+                        <ImageButton
+                            android:id="@+id/volume_down"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="64dp"
+                            android:layout_height="64dp"
+                            android:contentDescription="Volume Down"
+                            android:src="@drawable/ic_volume_down" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="24dp"
+                            android:layout_marginEnd="24dp"
+                            android:text="Volume"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <ImageButton
+                            android:id="@+id/volume_up"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="64dp"
+                            android:layout_height="64dp"
+                            android:contentDescription="Volume Up"
+                            android:src="@drawable/ic_volume_up" />
+                    </LinearLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/launch_url_button"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:text="Launch URL"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@+id/volume_card" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        </androidx.core.widget.NestedScrollView>
+
+    </FrameLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
