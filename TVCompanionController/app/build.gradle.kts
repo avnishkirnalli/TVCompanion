@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.avnishgamedev.tvcompanioncontroller"
+    namespace = "com.avnishkirnalli.tvcompanioncontroller"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.avnishgamedev.tvcompanioncontroller"
+        applicationId = "com.avnishkirnalli.tvcompanioncontroller"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -29,6 +29,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+    sourceSets {
+        getByName("main") {
+            java {
+                srcDir("build/generated/source/proto/main/java")
+            }
+        }
     }
 }
 
