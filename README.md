@@ -14,6 +14,17 @@ The built-in `Google TV` app provides only a digital replica of an Android TV re
 ## ▶️ Demo
 [![Watch demo](https://github.com/user-attachments/assets/a2ee1153-903b-4a3b-a95a-8d8544d10fca)](https://www.youtube.com/watch?v=n1YgiduXsnQ)
 
+## Quick Start
+
+1. Get the latest APKs from [releases](https://github.com/avnishkirnalli/TVCompanion/releases).
+2. Install `TVCompanion.apk` on your Android TV. (You can follow [this video](https://www.youtube.com/watch?v=A_VlVoQRPCE), only follow till APK installation, after that, `TV Companion` should be visible in the normal Apps section)
+3. Install `TVCompanionController.apk` on your mobile.
+4. Open `TV Companion` atleast once after installation on your TV. (It will start automatically from the next TV bootup)
+5. Open `TV Companion Controller` and you should soon see your TV listed.
+6. Select your TV, then when prompted, enter the pairing code shown on your tv.
+7. After that you should get a prompt asking for screen capture permission, it's recommended to click `Don't ask again` to prevent repeated requests whenever `TV Companion` starts.
+8. Now, you should be able to control your TV from your device and also stream the TV screen in realtime.
+
 ## How does it work?
 
 TV Companion consists of two Android Apps:
