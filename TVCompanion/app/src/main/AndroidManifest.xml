@@ -31,7 +31,7 @@
 
         <activity
             android:name=".TempActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:theme="@style/Theme.TVCompanion.Translucent"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -41,6 +41,7 @@
 
         <activity
             android:name=".MediaProjectionPermissionActivity"
+            android:theme="@style/Theme.TVCompanion.Translucent"
             android:exported="false" />
 
         <!-- Receiver for when device starts -->
