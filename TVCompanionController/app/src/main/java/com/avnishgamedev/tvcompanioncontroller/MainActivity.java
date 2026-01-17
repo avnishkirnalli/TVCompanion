@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.avnishgamedev.tvcompanioncontroller.model.DiscoveredDevice;
+import com.avnishgamedev.tvcompanioncontroller.model.SavedUrl;
 import com.avnishgamedev.tvcompanioncontroller.network.NsdHelper;
 import com.avnishgamedev.tvcompanioncontroller.pairing.PairingClient;
 import com.avnishgamedev.tvcompanioncontroller.pairing.TvCompanion;
@@ -40,6 +41,9 @@ import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -56,6 +60,7 @@ import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,6 +70,7 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "TVCompanionPrefs";
     private static final String KEY_DEVICE_NAME = "device_name"; // The NSD Service Name
+    private static final String KEY_SAVED_URLS = "saved_urls";
 
     private static final String KEYSTORE_FILE = "tv_companion_keystore.bks";
     private static final String KEYSTORE_ALIAS = "tvcompanion-client";
@@ -432,24 +438,100 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
         findViewById(R.id.volume_up).setVisibility(View.GONE);
         findViewById(R.id.volume_down).setVisibility(View.GONE);
 
+        findViewById(R.id.launch_url_button).setOnClickListener(v -> showUrlSelectionDialog());
+    }
 
-        findViewById(R.id.launch_url_button).setOnClickListener(v -> {
-            final EditText input = new EditText(this);
-            input.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
-            input.setText("https://www.youtube.com");
+    private void showUrlSelectionDialog() {
+        List<SavedUrl> savedUrls = getSavedUrls();
+        List<String> items = new ArrayList<>();
+        for (SavedUrl savedUrl : savedUrls) {
+            items.add(savedUrl.getTitle());
+        }
+        items.add("Add new URL...");
 
-            new AlertDialog.Builder(this)
-                    .setTitle("Launch URL")
-                    .setView(input)
-                    .setPositiveButton("Launch", (dialog, which) -> {
-                        String url = input.getText().toString().trim();
+        new AlertDialog.Builder(this)
+                .setTitle("Select URL to launch")
+                .setItems(items.toArray(new CharSequence[0]), (dialog, which) -> {
+                    if (which == items.size() - 1) {
+                        // "Add new URL..." clicked
+                        showAddUrlDialog();
+                    } else {
+                        // A saved URL is clicked
+                        String url = savedUrls.get(which).getUrl();
                         if (!url.isEmpty()) {
-                            executor.submit(() -> { if (tvCompanion != null) tvCompanion.launchUrl(url); });
+                            executor.submit(() -> {
+                                if (tvCompanion != null) tvCompanion.launchUrl(url);
+                            });
                         }
-                    })
-                    .setNegativeButton("Cancel", (dialog, which) -> dialog.cancel())
-                    .show();
-        });
+                    }
+                })
+                .show();
+    }
+
+    private void showAddUrlDialog() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        // Setting padding programmatically. A better approach would be to create a new layout xml file.
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        layout.setPadding(padding, padding, padding, padding);
+
+        final EditText titleInput = new EditText(this);
+        titleInput.setHint("Title (e.g., YouTube)");
+
+        final EditText urlInput = new EditText(this);
+        urlInput.setHint("URL (e.g., https://www.youtube.com)");
+        urlInput.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
+
+        layout.addView(titleInput);
+        layout.addView(urlInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Add New URL")
+                .setView(layout)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String title = titleInput.getText().toString().trim();
+                    String url = urlInput.getText().toString().trim();
+                    if (!title.isEmpty() && !url.isEmpty()) {
+                        List<SavedUrl> savedUrls = getSavedUrls();
+                        savedUrls.add(new SavedUrl(title, url));
+                        saveUrls(savedUrls);
+                        Toast.makeText(this, "URL saved!", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.cancel())
+                .show();
+    }
+
+    private List<SavedUrl> getSavedUrls() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String json = prefs.getString(KEY_SAVED_URLS, "[]");
+        List<SavedUrl> urls = new ArrayList<>();
+        try {
+            JSONArray jsonArray = new JSONArray(json);
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.getJSONObject(i);
+                urls.add(new SavedUrl(jsonObject.getString("title"), jsonObject.getString("url")));
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Error parsing saved URLs", e);
+        }
+        return urls;
+    }
+
+    private void saveUrls(List<SavedUrl> urls) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        JSONArray jsonArray = new JSONArray();
+        for (SavedUrl savedUrl : urls) {
+            try {
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("title", savedUrl.getTitle());
+                jsonObject.put("url", savedUrl.getUrl());
+                jsonArray.put(jsonObject);
+            } catch (JSONException e) {
+                Log.e(TAG, "Error creating JSON for URL", e);
+            }
+        }
+        prefs.edit().putString(KEY_SAVED_URLS, jsonArray.toString()).apply();
     }
 
     @Override
