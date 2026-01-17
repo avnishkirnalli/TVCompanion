@@ -12,7 +12,7 @@ TV Companion is a two-app system that enables rich remote control of Android TV 
 The built-in `Google TV` app provides only a digital replica of an Android TV remote. I wanted an app that could do more, like launch URLs and stream the TV screen to my mobile phone directly.
 
 ## ▶️ Demo
-[![Watch demo](https://github.com/user-attachments/assets/a2ee1153-903b-4a3b-a95a-8d8544d10fca)](https://www.youtube.com/watch?v=sBO9arPE8to)
+[![Watch demo](https://github.com/user-attachments/assets/a2ee1153-903b-4a3b-a95a-8d8544d10fca)](https://www.youtube.com/watch?v=n1YgiduXsnQ)
 
 ## How does it work?
 
