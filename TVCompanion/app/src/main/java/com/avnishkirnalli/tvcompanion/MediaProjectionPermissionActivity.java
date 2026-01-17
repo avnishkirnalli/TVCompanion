@@ -20,9 +20,6 @@ public class MediaProjectionPermissionActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Make the activity transparent
-        setTheme(android.R.style.Theme_Translucent_NoTitleBar);
-
         ResultReceiver receiver = getIntent().getParcelableExtra("resultReceiver");
         if (receiver == null) {
             Log.e("MediaProjectionPermissionActivity", "No ResultReceiver provided. Finishing.");
