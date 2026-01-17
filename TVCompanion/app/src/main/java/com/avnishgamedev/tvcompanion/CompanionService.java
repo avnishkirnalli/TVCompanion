@@ -4,20 +4,15 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -106,36 +101,19 @@ public class CompanionService extends Service {
     }
 
     private void handleClient(Socket clientSocket) {
-        BroadcastReceiver streamStartedReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (ScreenStreamingService.ACTION_STREAM_STARTED.equals(intent.getAction())) {
-                    int port = intent.getIntExtra(ScreenStreamingService.EXTRA_STREAM_PORT, -1);
-                    if (port != -1) {
-                        try (DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
-                            out.writeInt(port);
-                            Log.d(TAG, "Sent streaming port " + port + " to client.");
-                        } catch (IOException e) {
-                            Log.e(TAG, "Failed to send port to client.", e);
-                        }
-                    }
-                    unregisterReceiver(this);
-                }
-            }
-        };
-
         try {
             if (!isStreaming) {
                 isStreaming = true;
-                IntentFilter filter = new IntentFilter(ScreenStreamingService.ACTION_STREAM_STARTED);
-                ContextCompat.registerReceiver(this, streamStartedReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
-                startService(new Intent(this, ScreenStreamingService.class));
-                Log.d(TAG, "Requested to start ScreenStreamingService.");
+                String clientIp = clientSocket.getInetAddress().getHostAddress();
+
+                Intent streamIntent = new Intent(this, ScreenStreamingService.class);
+                streamIntent.putExtra(ScreenStreamingService.EXTRA_CLIENT_IP, clientIp);
+                startService(streamIntent);
+
+                Log.d(TAG, "Requested to start ScreenStreamingService for client: " + clientIp);
             }
 
-            // Keep the connection alive until it's closed by the client or an error occurs.
-            // A simple way to do this is to try reading from the input stream.
-            // When the client disconnects, read() will throw an exception.
+            // Keep the connection alive to detect when the client disconnects.
             //noinspection ResultOfMethodCallIgnored
             clientSocket.getInputStream().read();
 
@@ -146,11 +124,6 @@ public class CompanionService extends Service {
                 Log.d(TAG, "Client disconnected, stopping stream.");
                 stopService(new Intent(this, ScreenStreamingService.class));
                 isStreaming = false;
-            }
-            try {
-                unregisterReceiver(streamStartedReceiver);
-            } catch (IllegalArgumentException e) {
-                // Receiver might not have been registered if streaming was already active.
             }
             try {
                 clientSocket.close();

@@ -15,5 +15,6 @@ public class TempActivity extends AppCompatActivity {
         Log.d("TempActivity", "Starting Service");
         Intent serviceIntent = new Intent(this, CompanionService.class);
         startForegroundService(serviceIntent);
+        finish(); // Close the activity immediately after starting the service
     }
 }

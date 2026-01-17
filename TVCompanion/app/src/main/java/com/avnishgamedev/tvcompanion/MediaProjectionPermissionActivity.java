@@ -20,19 +20,35 @@ public class MediaProjectionPermissionActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        ResultReceiver receiver = getIntent().getParcelableExtra("resultReceiver");
+        // Make the activity transparent
+        setTheme(android.R.style.Theme_Translucent_NoTitleBar);
 
-        ActivityResultLauncher<Intent> a = registerForActivityResult(
+        ResultReceiver receiver = getIntent().getParcelableExtra("resultReceiver");
+        if (receiver == null) {
+            Log.e("MediaProjectionPermissionActivity", "No ResultReceiver provided. Finishing.");
+            finish();
+            return;
+        }
+
+        ActivityResultLauncher<Intent> permissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
-                    if (receiver != null) {
-                        Bundle bundle = new Bundle();
+                    Bundle bundle = new Bundle();
+                    if (result.getData() != null) {
                         bundle.putParcelable("data", result.getData());
-                        receiver.send(result.getResultCode(), bundle);
                     }
+                    receiver.send(result.getResultCode(), bundle);
+                    finish(); // Finish the activity after the result is sent
                 }
         );
 
-        a.launch(getSystemService(MediaProjectionManager.class).createScreenCaptureIntent());
+        MediaProjectionManager mediaProjectionManager = getSystemService(MediaProjectionManager.class);
+        if (mediaProjectionManager != null) {
+            permissionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent());
+        } else {
+            Log.e("MediaProjectionPermissionActivity", "MediaProjectionManager is not available. Finishing.");
+            receiver.send(RESULT_CANCELED, null);
+            finish();
+        }
     }
 }

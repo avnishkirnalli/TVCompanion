@@ -7,6 +7,9 @@ import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.Surface;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -42,6 +45,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.math.BigInteger;
+import java.net.Socket;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
@@ -56,7 +60,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity implements NsdHelper.NsdListener, DeviceAdapter.OnDeviceClickListener {
+public class MainActivity extends AppCompatActivity implements NsdHelper.NsdListener, DeviceAdapter.OnDeviceClickListener, SurfaceHolder.Callback {
 
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "TVCompanionPrefs";
@@ -78,6 +82,11 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
     private String savedDeviceName;
     private boolean isConnectingToSavedDevice = false;
 
+    private SurfaceView surfaceView;
+    private RTPReceiver rtpReceiver;
+    private Socket clientSocket;
+    private DiscoveredDevice streamingDevice;
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
@@ -87,6 +96,9 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        surfaceView = findViewById(R.id.surfaceView);
+        surfaceView.getHolder().addCallback(this);
 
         Security.removeProvider("BC");
         Security.addProvider(new BouncyCastleProvider());
@@ -192,6 +204,7 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
         if (clearDevice) {
             isConnectingToSavedDevice = false;
             savedDeviceName = null;
+            streamingDevice = null;
             getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply();
         }
         showDiscoveryUI();
@@ -343,9 +356,47 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
         editor.putString(KEY_DEVICE_NAME, device.getName());
         editor.apply();
         this.savedDeviceName = device.getName();
+        this.streamingDevice = device;
 
         discoveryStatusText.setText("Connecting to " + device.getName() + "...");
         connectToDevice(device);
+    }
+
+    private void startStream(Surface surface) {
+        if (rtpReceiver != null) {
+            stopStream();
+        }
+
+        if (streamingDevice == null) {
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                clientSocket = new Socket(streamingDevice.getHostAddress(), streamingDevice.getPort());
+                rtpReceiver = new RTPReceiver(surface);
+                rtpReceiver.start();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to connect to device", e);
+            }
+        }).start();
+    }
+
+    private void stopStream() {
+        if (rtpReceiver != null) {
+            new Thread(() -> {
+                rtpReceiver.shutdown();
+                rtpReceiver = null;
+                Log.d(TAG, "RTP Receiver stopped");
+                if (clientSocket != null && clientSocket.isConnected()) {
+                    try {
+                        clientSocket.close();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to close socket", e);
+                    }
+                }
+            }).start();
+        }
     }
 
     private void showRemoteUI() {
@@ -404,11 +455,31 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopStream();
         executor.submit(() -> {
             if (tvCompanion != null) {
                 tvCompanion.disconnect();
             }
         });
         executor.shutdown();
+    }
+
+    @Override
+    public void surfaceCreated(@NonNull SurfaceHolder holder) {
+        Log.d(TAG, "Surface created.");
+        if (streamingDevice != null) {
+            startStream(holder.getSurface());
+        }
+    }
+
+    @Override
+    public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
+        // Not used
+    }
+
+    @Override
+    public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+        Log.d(TAG, "Surface destroyed.");
+        stopStream();
     }
 }
