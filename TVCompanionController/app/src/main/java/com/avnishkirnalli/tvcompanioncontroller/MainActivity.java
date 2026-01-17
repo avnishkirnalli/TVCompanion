@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.method.LinkMovementMethod;
+import android.text.util.Linkify;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -194,6 +196,18 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.action_switch_device) {
             disconnectAndReset(true);
+            return true;
+        }
+        if (item.getItemId() == R.id.action_app_info) {
+            View dialogView = getLayoutInflater().inflate(R.layout.dialog_app_info, null);
+            TextView appInfoText = dialogView.findViewById(R.id.appInfoText);
+            Linkify.addLinks(appInfoText, Linkify.WEB_URLS);
+            appInfoText.setMovementMethod(LinkMovementMethod.getInstance());
+
+            new AlertDialog.Builder(this)
+                    .setView(dialogView)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
             return true;
         }
         return super.onOptionsItemSelected(item);

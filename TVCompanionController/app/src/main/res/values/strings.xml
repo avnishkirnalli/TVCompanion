@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">TV Companion Controller</string>
+    <string name="action_app_info">Application Info</string>
+    <string name="action_switch_device">Switch Device</string>
 </resources>
