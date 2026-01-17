@@ -209,7 +209,7 @@ public class PairingClient {
     private byte[] calculateSecret(RSAPublicKey clientKey, RSAPublicKey serverKey, String code) throws Exception {
         if (code.length() < 6) throw new IllegalArgumentException("Code too short");
         String suffix = code.substring(2);
-        MessageDigest digest = MessageDigest.getInstance("SHA-26");
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(getHexBytes(clientKey.getModulus()));
         digest.update(getHexBytes(clientKey.getPublicExponent()));
         digest.update(getHexBytes(serverKey.getModulus()));
