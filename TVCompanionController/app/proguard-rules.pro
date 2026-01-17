@@ -19,3 +19,14 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Bouncy Castle rules to prevent R8 from removing necessary classes
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+
+# Protobuf rules for release builds
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.google.protobuf.**
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
+    <fields>;
+}
