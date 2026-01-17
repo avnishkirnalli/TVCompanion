@@ -75,6 +75,14 @@ public class TvCompanion {
         if (remoteClient != null) remoteClient.pressKey(RemoteMessageProto.RemoteKeyCode.KEYCODE_HOME);
     }
 
+    public void volumeUp() {
+        if (remoteClient != null) remoteClient.pressKey(RemoteMessageProto.RemoteKeyCode.KEYCODE_VOLUME_UP);
+    }
+
+    public void volumeDown() {
+        if (remoteClient != null) remoteClient.pressKey(RemoteMessageProto.RemoteKeyCode.KEYCODE_VOLUME_DOWN);
+    }
+
     public void launchUrl(String url) {
         if (remoteClient != null) remoteClient.launchApp(url);
     }

@@ -434,9 +434,8 @@ public class MainActivity extends AppCompatActivity implements NsdHelper.NsdList
         findViewById(R.id.home_button).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.home(); }));
         findViewById(R.id.back_button).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.back(); }));
 
-        // Remove volume buttons for now as TvCompanion doesn't have them
-        findViewById(R.id.volume_up).setVisibility(View.GONE);
-        findViewById(R.id.volume_down).setVisibility(View.GONE);
+        findViewById(R.id.volume_up).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.volumeUp(); }));
+        findViewById(R.id.volume_down).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.volumeDown(); }));
 
         findViewById(R.id.launch_url_button).setOnClickListener(v -> showUrlSelectionDialog());
     }
