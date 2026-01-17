@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanion;
+package com.avnishkirnalli.tvcompanion;
 
 import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 

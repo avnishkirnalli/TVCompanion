@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanion;
+package com.avnishkirnalli.tvcompanion;
 
 import android.app.Notification;
 import android.app.NotificationChannel;

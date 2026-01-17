@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanion;
+package com.avnishkirnalli.tvcompanion;
 
 import android.content.Context;
 
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        assertEquals("com.avnishgamedev.tvcompanion", appContext.getPackageName());
+        assertEquals("com.avnishkirnalli.tvcompanion", appContext.getPackageName());
     }
 }

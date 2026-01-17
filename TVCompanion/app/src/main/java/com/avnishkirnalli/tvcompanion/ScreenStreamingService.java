@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanion;
+package com.avnishkirnalli.tvcompanion;
 
 import static android.app.Activity.RESULT_OK;
 
@@ -37,7 +37,7 @@ import java.net.DatagramSocket;
 import java.nio.ByteBuffer;
 
 public class ScreenStreamingService extends Service {
-    public static final String EXTRA_CLIENT_IP = "com.avnishgamedev.tvcompanion.EXTRA_CLIENT_IP";
+    public static final String EXTRA_CLIENT_IP = "com.avnishkirnalli.tvcompanion.EXTRA_CLIENT_IP";
     private static final String TAG = "ScreenStreamingService";
     private static final String CHANNEL_ID = "ScreenStreamingServiceChannel";
     private static final int NOTIFICATION_ID = 1;

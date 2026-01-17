@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanion;
+package com.avnishkirnalli.tvcompanion;
 
 import android.content.Intent;
 import android.os.Bundle;
