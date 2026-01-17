@@ -2,439 +2,565 @@ package com.avnishgamedev.tvcompanioncontroller;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.net.nsd.NsdManager;
-import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
-import android.widget.Button;
 import android.widget.EditText;
-import android.widget.FrameLayout;
-import android.widget.ProgressBar;
-import android.widget.RelativeLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.widget.NestedScrollView;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import com.avnishgamedev.tvcompanioncontroller.model.DiscoveredDevice;
+import com.avnishgamedev.tvcompanioncontroller.model.SavedUrl;
+import com.avnishgamedev.tvcompanioncontroller.network.NsdHelper;
+import com.avnishgamedev.tvcompanioncontroller.pairing.PairingClient;
+import com.avnishgamedev.tvcompanioncontroller.pairing.TvCompanion;
+import com.avnishgamedev.tvcompanioncontroller.ui.DeviceAdapter;
+import com.google.android.material.appbar.MaterialToolbar;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.net.InetAddress;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.KeyUsage;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.math.BigInteger;
 import java.net.Socket;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Security;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
+public class MainActivity extends AppCompatActivity implements NsdHelper.NsdListener, DeviceAdapter.OnDeviceClickListener, SurfaceHolder.Callback {
+
     private static final String TAG = "MainActivity";
-    private static final String SERVICE_TYPE = "_http._tcp.";
-
-    // Video dimensions
-    private static final int VIDEO_WIDTH = 1280;
-    private static final int VIDEO_HEIGHT = 720;
-
-    NsdManager nsdManager;
-    NsdManager.DiscoveryListener discoveryListener;
-    NsdManager.ResolveListener resolveListener;
-    NsdServiceInfo connectedService;
-    Socket socket;
-    DataInputStream in;
-    DataOutputStream out;
-
-    // Widgets
-    FrameLayout loadingLayout;
-    Button btnVolumeUp;
-    Button btnVolumeDown;
-    Button btnStartStream;
-    Button btnStopStream;
-    EditText etVolume;
-    Button btnSetVolume;
-    Button btnAddUrl;
-    Button btnLaunchUrl;
-    AutoCompleteTextView etUrl;
-    SurfaceView surfaceView;
-    ProgressBar progressBar;
-
-    // URL List
-    ArrayList<String> urlList;
-    ArrayAdapter<String> urlAdapter;
-    SharedPreferences prefs;
-    private static final String KEY_URLS = "saved_urls";
     private static final String PREFS_NAME = "TVCompanionPrefs";
+    private static final String KEY_DEVICE_NAME = "device_name"; // The NSD Service Name
+    private static final String KEY_SAVED_URLS = "saved_urls";
 
-    // RTP Streaming
+    private static final String KEYSTORE_FILE = "tv_companion_keystore.bks";
+    private static final String KEYSTORE_ALIAS = "tvcompanion-client";
+    private static final String KEYSTORE_PASSWORD = "password";
+
+    private NsdHelper nsdHelper;
+    private TvCompanion tvCompanion;
+    private KeyStore keyStore;
+
+    private DeviceAdapter deviceAdapter;
+    private LinearLayout deviceDiscoveryLayout;
+    private NestedScrollView remoteControlLayout;
+    private TextView discoveryStatusText;
+
+    private String savedDeviceName;
+    private boolean isConnectingToSavedDevice = false;
+
+    private SurfaceView surfaceView;
     private RTPReceiver rtpReceiver;
-    private boolean isSurfaceReady = false;
+    private Socket clientSocket;
+    private DiscoveredDevice streamingDevice;
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
+        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
 
-        initializeDiscoveryListener();
-        initializeResolveListener();
-
-        nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
-
-        // Initialize Widgets
-        loadingLayout = findViewById(R.id.loadingLayout);
         surfaceView = findViewById(R.id.surfaceView);
-        progressBar = findViewById(R.id.progressBar);
-
-        // Setup SurfaceView
         surfaceView.getHolder().addCallback(this);
 
-        btnVolumeUp = findViewById(R.id.btnVolumeUp);
-        btnVolumeUp.setOnClickListener(v -> sendCommand("volume_up"));
-
-        btnVolumeDown = findViewById(R.id.btnVolumeDown);
-        btnVolumeDown.setOnClickListener(v -> sendCommand("volume_down"));
-
-        etVolume = findViewById(R.id.etVolume);
-
-        btnSetVolume = findViewById(R.id.btnSetVolume);
-        btnSetVolume.setOnClickListener(v -> sendCommand("volume_set " + etVolume.getText().toString()));
-
-        etUrl = findViewById(R.id.etUrl);
-
-        btnAddUrl = findViewById(R.id.btnAddUrl);
-
-        btnLaunchUrl = findViewById(R.id.btnLaunchUrl);
-
-        btnStartStream = findViewById(R.id.btnStartStream);
-        btnStartStream.setOnClickListener(v -> {
-            sendCommand("start_stream");
-            startVideoStream();
-        });
-
-        btnStopStream = findViewById(R.id.btnStopStream);
-        btnStopStream.setOnClickListener(v -> {
-            sendCommand("stop_stream");
-            stopVideoStream();
-        });
-
-        // Initialize SharedPreferences
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-
-        // Load saved URLs
-        urlList = getUrlList();
-        if (urlList == null) {
-            urlList = new ArrayList<>();
-        }
-
-        // Setup adapter for dropdown
-        urlAdapter = new ArrayAdapter<>(this,
-                R.layout.dropdown_item, urlList);
-        etUrl.setAdapter(urlAdapter);
-
-        // Add URL button click
-        btnAddUrl.setOnClickListener(v -> {
-                String newUrl = etUrl.getText().toString().trim();
-                if (!newUrl.isEmpty()) {
-                    if (!urlList.contains(newUrl)) {
-                        urlList.add(newUrl);
-                        urlAdapter.notifyDataSetChanged();
-                        saveUrlList(urlList);
-                        Toast.makeText(MainActivity.this,
-                                "URL saved", Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(MainActivity.this,
-                                "URL already exists", Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(MainActivity.this,
-                            "Please enter a URL", Toast.LENGTH_SHORT).show();
-                }
-        });
-
-        btnLaunchUrl.setOnClickListener(v -> {
-                String selectedUrl = etUrl.getText().toString().trim();
-                if (!selectedUrl.isEmpty()) {
-                    Toast.makeText(MainActivity.this,
-                            "Launching: " + selectedUrl, Toast.LENGTH_SHORT).show();
-                    sendCommand("launch_url " + selectedUrl);
-                } else {
-                    Toast.makeText(MainActivity.this,
-                            "Please select or enter a URL", Toast.LENGTH_SHORT).show();
-                }
-        });
-
-        // Show dropdown when clicked
-        etUrl.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus && !urlList.isEmpty()) {
-                etUrl.showDropDown();
-            }
-        });
-    }
-
-    private void saveUrlList(ArrayList<String> list) {
-        SharedPreferences.Editor editor = prefs.edit();
-        Gson gson = new Gson();
-        String json = gson.toJson(list);
-        editor.putString(KEY_URLS, json);
-        editor.apply();
-    }
-
-    private ArrayList<String> getUrlList() {
-        Gson gson = new Gson();
-        String json = prefs.getString(KEY_URLS, null);
-        Type type = new TypeToken<ArrayList<String>>() {}.getType();
-        return gson.fromJson(json, type);
-    }
-
-    // SurfaceHolder.Callback methods
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        Log.d(TAG, "Surface created");
-        isSurfaceReady = true;
-    }
-
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        Log.d(TAG, "Surface changed: " + width + "x" + height);
-        // Adjust SurfaceView to maintain aspect ratio
-        adjustAspectRatio(width, height);
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG, "Surface destroyed");
-        isSurfaceReady = false;
-        stopVideoStream();
-    }
-
-    private void adjustAspectRatio(int viewWidth, int viewHeight) {
-        if (viewWidth == 0 || viewHeight == 0) return;
-
-        float videoAspectRatio = (float) VIDEO_WIDTH / VIDEO_HEIGHT;
-        float viewAspectRatio = (float) viewWidth / viewHeight;
-
-        int newWidth, newHeight;
-
-        if (viewAspectRatio > videoAspectRatio) {
-            // View is wider than video - fit height
-            newHeight = viewHeight;
-            newWidth = (int) (viewHeight * videoAspectRatio);
-        } else {
-            // View is taller than video - fit width
-            newWidth = viewWidth;
-            newHeight = (int) (viewWidth / videoAspectRatio);
-        }
-
-        // Update SurfaceView layout params to maintain aspect ratio
-        RelativeLayout.LayoutParams layoutParams =
-                (RelativeLayout.LayoutParams) surfaceView.getLayoutParams();
-        layoutParams.width = newWidth;
-        layoutParams.height = newHeight;
-        layoutParams.addRule(RelativeLayout.CENTER_IN_PARENT);
-
-        surfaceView.post(() -> surfaceView.setLayoutParams(layoutParams));
-
-        Log.d(TAG, "Adjusted aspect ratio: " + newWidth + "x" + newHeight);
-    }
-
-    private void startVideoStream() {
-        if (rtpReceiver != null) {
-            toastOnUiThread("Stream already running");
-            return;
-        }
-
-        if (!isSurfaceReady) {
-            toastOnUiThread("Display not ready");
-            return;
-        }
+        Security.removeProvider("BC");
+        Security.addProvider(new BouncyCastleProvider());
 
         try {
-            runOnUiThread(() -> progressBar.setVisibility(View.VISIBLE));
+            initKeyStore();
+        } catch (Exception e) {
+            Toast.makeText(this, "Error: Could not initialize security.", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
-            rtpReceiver = new RTPReceiver(surfaceView.getHolder().getSurface());
-            rtpReceiver.start();
+        deviceDiscoveryLayout = findViewById(R.id.deviceDiscoveryLayout);
+        remoteControlLayout = findViewById(R.id.remoteControlLayout);
+        discoveryStatusText = findViewById(R.id.discoveryStatusText);
 
-            Log.d(TAG, "RTP receiver started");
-            toastOnUiThread("Stream started");
+        setupRecyclerView();
+        setupRemoteButtons();
 
-            // Hide progress bar after 2 seconds
-            surfaceView.postDelayed(() -> {
-                runOnUiThread(() -> progressBar.setVisibility(View.GONE));
-            }, 2000);
+        findViewById(R.id.scanButton).setOnClickListener(v -> disconnectAndReset(true));
 
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to start RTP receiver", e);
-            toastOnUiThread("Failed to start stream: " + e.getMessage());
-            runOnUiThread(() -> progressBar.setVisibility(View.GONE));
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        savedDeviceName = prefs.getString(KEY_DEVICE_NAME, null);
+
+        if (savedDeviceName != null) {
+            isConnectingToSavedDevice = true;
+        }
+        startDiscovery();
+    }
+
+    private void initKeyStore() throws Exception {
+        keyStore = KeyStore.getInstance("BKS");
+        File keyStoreFile = new File(getFilesDir(), KEYSTORE_FILE);
+
+        if (keyStoreFile.exists()) {
+            try (FileInputStream fis = new FileInputStream(keyStoreFile)) {
+                keyStore.load(fis, KEYSTORE_PASSWORD.toCharArray());
+            }
+        } else {
+            // Generate a new key pair and self-signed certificate
+            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+            keyPairGenerator.initialize(2048);
+            KeyPair keyPair = keyPairGenerator.generateKeyPair();
+            PublicKey publicKey = keyPair.getPublic();
+            PrivateKey privateKey = keyPair.getPrivate();
+
+            X500Name issuer = new X500Name("CN=TVCompanionController");
+            BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
+            Date notBefore = new Date();
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.YEAR, 10);
+            Date notAfter = cal.getTime();
+
+            X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+                    issuer, serial, notBefore, notAfter, issuer, publicKey);
+
+            // Add extensions for modern compatibility
+            certBuilder.addExtension(Extension.basicConstraints, false, new BasicConstraints(false));
+            certBuilder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(privateKey);
+            Certificate certificate = new JcaX509CertificateConverter().setProvider("BC").getCertificate(certBuilder.build(signer));
+
+            keyStore.load(null, null);
+            keyStore.setKeyEntry(KEYSTORE_ALIAS, privateKey, KEYSTORE_PASSWORD.toCharArray(), new Certificate[]{certificate});
+
+            try (FileOutputStream fos = new FileOutputStream(keyStoreFile)) {
+                keyStore.store(fos, KEYSTORE_PASSWORD.toCharArray());
+            }
         }
     }
 
-    private void stopVideoStream() {
-        if (rtpReceiver != null) {
-            rtpReceiver.shutdown();
-            rtpReceiver = null;
-            Log.d(TAG, "RTP receiver stopped");
-            toastOnUiThread("Stream stopped");
-        }
-        runOnUiThread(() -> progressBar.setVisibility(View.GONE));
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
     }
 
-    private void initializeDiscoveryListener() {
-        discoveryListener = new NsdManager.DiscoveryListener() {
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem switchDeviceItem = menu.findItem(R.id.action_switch_device);
+        switchDeviceItem.setVisible(remoteControlLayout.getVisibility() == View.VISIBLE);
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_switch_device) {
+            disconnectAndReset(true);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void disconnectAndReset(boolean clearDevice) {
+        executor.submit(() -> {
+            if (tvCompanion != null) {
+                tvCompanion.disconnect();
+                tvCompanion = null;
+            }
+        });
+
+        if (clearDevice) {
+            isConnectingToSavedDevice = false;
+            savedDeviceName = null;
+            streamingDevice = null;
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply();
+        }
+        showDiscoveryUI();
+    }
+
+    private void setupRecyclerView() {
+        RecyclerView devicesRecyclerView = findViewById(R.id.devicesRecyclerView);
+        devicesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        deviceAdapter = new DeviceAdapter(this);
+        devicesRecyclerView.setAdapter(deviceAdapter);
+    }
+
+    private void startDiscovery() {
+        if (nsdHelper != null) {
+            nsdHelper.stopDiscovery();
+        }
+        deviceAdapter.setDevices(new ArrayList<>());
+
+        if (isConnectingToSavedDevice && savedDeviceName != null) {
+            discoveryStatusText.setText("Searching for " + savedDeviceName + "...");
+        } else {
+            discoveryStatusText.setText("Searching for devices...");
+        }
+        nsdHelper = new NsdHelper(this, this);
+        nsdHelper.startDiscovery();
+    }
+
+    private void connectToDevice(DiscoveredDevice device) {
+        tvCompanion = new TvCompanion(device.getHostAddress(), this);
+        executor.submit(() -> {
+            try {
+                Log.d(TAG, "Attempting existing connection...");
+                tvCompanion.connect();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Connected to " + savedDeviceName, Toast.LENGTH_SHORT).show();
+                    showRemoteUI();
+                });
+            } catch (Exception e) {
+                Log.w(TAG, "Connection failed (" + e.getMessage() + "), starting pairing.", e);
+                startPairing();
+            }
+        });
+    }
+
+    private void startPairing() {
+        if (tvCompanion == null) return;
+        tvCompanion.pair(new PairingClient.PairingCallback() {
             @Override
-            public void onDiscoveryStarted(String regType) {
-                Log.d(TAG, "Service discovery started");
+            public void onSecretRequested() {
+                Log.d(TAG, "Secret requested");
+                promptForPairingCode();
             }
 
             @Override
-            public void onServiceFound(NsdServiceInfo service) {
-                Log.d(TAG, "Service discovery success: " + service);
-                if (!service.getServiceType().equals(SERVICE_TYPE)) {
-                    Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
-                } else if (service.getServiceName().contains("TVCompanionService")) {
-                    nsdManager.resolveService(service, resolveListener);
-                }
-            }
-
-            @Override
-            public void onServiceLost(NsdServiceInfo service) {
-                Log.e(TAG, "Service lost: " + service);
-                if (connectedService != null) {
-                    if (connectedService.getServiceName().equals(service.getServiceName())) {
-                        connectedService = null;
-                        setLoading(true);
-
-                        stopVideoStream();
-
-                        if (socket != null) {
-                            try {
-                                socket.close();
-                                if (in != null) in.close();
-                                if (out != null) out.close();
-                            } catch (IOException e) {
-                                Log.e(TAG, "Error closing socket", e);
-                            }
-                        }
+            public void onSuccess() {
+                Log.d(TAG, "Pairing success");
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Pairing successful!", Toast.LENGTH_SHORT).show());
+                // After successful pairing, try to connect again
+                executor.submit(() -> {
+                    try {
+                        tvCompanion.connect();
+                        runOnUiThread(() -> {
+                            Toast.makeText(MainActivity.this, "Connected to " + savedDeviceName, Toast.LENGTH_SHORT).show();
+                            showRemoteUI();
+                        });
+                    } catch (Exception e) {
+                        Log.e(TAG, "Connection failed after pairing", e);
+                        runOnUiThread(() -> onError(new Exception("Connection failed after pairing.")));
                     }
-                }
+                });
             }
 
             @Override
-            public void onDiscoveryStopped(String serviceType) {
-                Log.i(TAG, "Discovery stopped: " + serviceType);
+            public void onError(Exception e) {
+                Log.e(TAG, "Pairing error", e);
+                // Avoid crashing on recursive onError calls from UI thread
+                // runOnUiThread is not needed here if it's already on UI thread, checking...
+                // But generally safe. The crash log indicates stack overflow from onError calling itself?
+                // Or loop in disconnectAndReset?
+                
+                 runOnUiThread(() -> {
+                     // Check if activity is still valid
+                     if (!isFinishing() && !isDestroyed()) {
+                        Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        disconnectAndReset(false);
+                     }
+                 });
             }
-
-            @Override
-            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                nsdManager.stopServiceDiscovery(this);
-            }
-
-            @Override
-            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                nsdManager.stopServiceDiscovery(this);
-            }
-        };
+        });
     }
 
-    private void initializeResolveListener() {
-        resolveListener = new NsdManager.ResolveListener() {
+    private void promptForPairingCode() {
+        runOnUiThread(() -> {
+            final EditText input = new EditText(this);
+            input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
 
-            @Override
-            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                Log.e(TAG, "Resolve failed: " + errorCode);
-            }
-
-            @Override
-            public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                Log.d(TAG, "Resolve Succeeded: " + serviceInfo);
-                connectedService = serviceInfo;
-                connectToServer();
-            }
-        };
+            new AlertDialog.Builder(this)
+                    .setTitle("Pairing Request")
+                    .setMessage("Enter the code shown on your TV:")
+                    .setView(input)
+                    .setCancelable(false)
+                    .setPositiveButton("Submit", (dialog, which) -> {
+                        String code = input.getText().toString().trim();
+                        executor.submit(() -> {
+                            try {
+                                tvCompanion.sendPairingSecret(code);
+                            } catch (Exception e) {
+                                Log.e(TAG, "Failed to send pairing secret", e);
+                            }
+                        });
+                    })
+                    .setNegativeButton("Cancel", (dialog, which) -> {
+                        dialog.cancel();
+                        disconnectAndReset(true);
+                    })
+                    .show();
+        });
     }
 
-    private void connectToServer() {
+
+    @Override
+    public void onDeviceDiscovered(DiscoveredDevice device) {
+        runOnUiThread(() -> {
+            if (isConnectingToSavedDevice && device.getName().equals(savedDeviceName)) {
+                isConnectingToSavedDevice = false;
+                onDeviceClick(device);
+            } else if (!isConnectingToSavedDevice) {
+                discoveryStatusText.setText("Select a device:");
+                deviceAdapter.addDevice(device);
+            }
+        });
+    }
+
+    @Override
+    public void onDiscoveryFailed() {
+        runOnUiThread(() -> {
+            discoveryStatusText.setText("Discovery failed. Please try again.");
+            isConnectingToSavedDevice = false;
+        });
+    }
+
+    @Override
+    public void onDeviceClick(DiscoveredDevice device) {
+        if (nsdHelper != null) {
+            nsdHelper.stopDiscovery();
+        }
+
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString(KEY_DEVICE_NAME, device.getName());
+        editor.apply();
+        this.savedDeviceName = device.getName();
+        this.streamingDevice = device;
+
+        discoveryStatusText.setText("Connecting to " + device.getName() + "...");
+        connectToDevice(device);
+    }
+
+    private void startStream(Surface surface) {
+        if (rtpReceiver != null) {
+            stopStream();
+        }
+
+        if (streamingDevice == null) {
+            return;
+        }
+
         new Thread(() -> {
             try {
-                InetAddress host = connectedService.getHost();
-                int port = connectedService.getPort();
-                Log.d(TAG, "Attempting to connect to host: " + host + ", port: " + port);
-
-                socket = new Socket(host, port);
-                in = new DataInputStream(socket.getInputStream());
-                out = new DataOutputStream(socket.getOutputStream());
-
-                Log.d(TAG, "Connected to server");
-                setLoading(false);
-                toastOnUiThread("Connected to TV Companion");
-
-            } catch (IOException e) {
-                Log.e(TAG, "Connection failed", e);
-                toastOnUiThread("Connection failed: " + e.getMessage());
+                clientSocket = new Socket(streamingDevice.getHostAddress(), streamingDevice.getPort());
+                rtpReceiver = new RTPReceiver(surface);
+                rtpReceiver.start();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to connect to device", e);
             }
         }).start();
     }
 
-    private void sendCommand(String command) {
-        if (socket != null && socket.isConnected()) {
+    private void stopStream() {
+        if (rtpReceiver != null) {
             new Thread(() -> {
-                try {
-                    out.writeUTF(command);
-                    out.flush();
-                    String response = in.readUTF();
-
-                    if (response.equals("ack")) {
-                        toastOnUiThread("Acknowledged");
-                    } else if (response.equals("noack")) {
-                        toastOnUiThread("Not Acknowledged");
-                    } else {
-                        toastOnUiThread("Unknown response: " + response);
+                rtpReceiver.shutdown();
+                rtpReceiver = null;
+                Log.d(TAG, "RTP Receiver stopped");
+                if (clientSocket != null && clientSocket.isConnected()) {
+                    try {
+                        clientSocket.close();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to close socket", e);
                     }
-                } catch (IOException e) {
-                    Log.e(TAG, "Command failed", e);
-                    toastOnUiThread("Command failed: " + e.getMessage());
                 }
             }).start();
-        } else {
-            toastOnUiThread("Not connected to server");
         }
     }
 
-    private void toastOnUiThread(String message) {
-        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_SHORT).show());
+    private void showRemoteUI() {
+        deviceDiscoveryLayout.setVisibility(View.GONE);
+        remoteControlLayout.setVisibility(View.VISIBLE);
+        Objects.requireNonNull(getSupportActionBar()).setTitle(savedDeviceName);
+        invalidateOptionsMenu();
     }
 
-    private void setLoading(boolean state) {
-        runOnUiThread(() -> loadingLayout.setVisibility(state ? View.VISIBLE : View.GONE));
+    private void showDiscoveryUI() {
+        deviceDiscoveryLayout.setVisibility(View.VISIBLE);
+        remoteControlLayout.setVisibility(View.GONE);
+        Objects.requireNonNull(getSupportActionBar()).setTitle(R.string.app_name);
+        invalidateOptionsMenu();
+        startDiscovery();
+    }
+
+    public void onError(Exception e) {
+        Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        disconnectAndReset(false);
+    }
+
+    private void setupRemoteButtons() {
+        findViewById(R.id.dpad_up).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.dpadUp(); }));
+        findViewById(R.id.dpad_down).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.dpadDown(); }));
+        findViewById(R.id.dpad_left).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.dpadLeft(); }));
+        findViewById(R.id.dpad_right).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.dpadRight(); }));
+        findViewById(R.id.dpad_center).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.dpadCenter(); }));
+        findViewById(R.id.home_button).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.home(); }));
+        findViewById(R.id.back_button).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.back(); }));
+
+        findViewById(R.id.volume_up).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.volumeUp(); }));
+        findViewById(R.id.volume_down).setOnClickListener(v -> executor.submit(() -> { if (tvCompanion != null) tvCompanion.volumeDown(); }));
+
+        findViewById(R.id.launch_url_button).setOnClickListener(v -> showUrlSelectionDialog());
+    }
+
+    private void showUrlSelectionDialog() {
+        List<SavedUrl> savedUrls = getSavedUrls();
+        List<String> items = new ArrayList<>();
+        for (SavedUrl savedUrl : savedUrls) {
+            items.add(savedUrl.getTitle());
+        }
+        items.add("Add new URL...");
+
+        new AlertDialog.Builder(this)
+                .setTitle("Select URL to launch")
+                .setItems(items.toArray(new CharSequence[0]), (dialog, which) -> {
+                    if (which == items.size() - 1) {
+                        // "Add new URL..." clicked
+                        showAddUrlDialog();
+                    } else {
+                        // A saved URL is clicked
+                        String url = savedUrls.get(which).getUrl();
+                        if (!url.isEmpty()) {
+                            executor.submit(() -> {
+                                if (tvCompanion != null) tvCompanion.launchUrl(url);
+                            });
+                        }
+                    }
+                })
+                .show();
+    }
+
+    private void showAddUrlDialog() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        // Setting padding programmatically. A better approach would be to create a new layout xml file.
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        layout.setPadding(padding, padding, padding, padding);
+
+        final EditText titleInput = new EditText(this);
+        titleInput.setHint("Title (e.g., YouTube)");
+
+        final EditText urlInput = new EditText(this);
+        urlInput.setHint("URL (e.g., https://www.youtube.com)");
+        urlInput.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
+
+        layout.addView(titleInput);
+        layout.addView(urlInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Add New URL")
+                .setView(layout)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String title = titleInput.getText().toString().trim();
+                    String url = urlInput.getText().toString().trim();
+                    if (!title.isEmpty() && !url.isEmpty()) {
+                        List<SavedUrl> savedUrls = getSavedUrls();
+                        savedUrls.add(new SavedUrl(title, url));
+                        saveUrls(savedUrls);
+                        Toast.makeText(this, "URL saved!", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.cancel())
+                .show();
+    }
+
+    private List<SavedUrl> getSavedUrls() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String json = prefs.getString(KEY_SAVED_URLS, "[]");
+        List<SavedUrl> urls = new ArrayList<>();
+        try {
+            JSONArray jsonArray = new JSONArray(json);
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.getJSONObject(i);
+                urls.add(new SavedUrl(jsonObject.getString("title"), jsonObject.getString("url")));
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Error parsing saved URLs", e);
+        }
+        return urls;
+    }
+
+    private void saveUrls(List<SavedUrl> urls) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        JSONArray jsonArray = new JSONArray();
+        for (SavedUrl savedUrl : urls) {
+            try {
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("title", savedUrl.getTitle());
+                jsonObject.put("url", savedUrl.getUrl());
+                jsonArray.put(jsonObject);
+            } catch (JSONException e) {
+                Log.e(TAG, "Error creating JSON for URL", e);
+            }
+        }
+        prefs.edit().putString(KEY_SAVED_URLS, jsonArray.toString()).apply();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-
-        if (discoveryListener != null) {
-            try {
-                nsdManager.stopServiceDiscovery(discoveryListener);
-            } catch (IllegalArgumentException e) {
-                Log.e(TAG, "Discovery listener already stopped", e);
+        stopStream();
+        executor.submit(() -> {
+            if (tvCompanion != null) {
+                tvCompanion.disconnect();
             }
-        }
+        });
+        executor.shutdown();
+    }
 
-        stopVideoStream();
-
-        if (socket != null) {
-            try {
-                socket.close();
-                if (in != null) in.close();
-                if (out != null) out.close();
-            } catch (IOException e) {
-                Log.e(TAG, "Error closing socket", e);
-            }
+    @Override
+    public void surfaceCreated(@NonNull SurfaceHolder holder) {
+        Log.d(TAG, "Surface created.");
+        if (streamingDevice != null) {
+            startStream(holder.getSurface());
         }
+    }
+
+    @Override
+    public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
+        // Not used
+    }
+
+    @Override
+    public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+        Log.d(TAG, "Surface destroyed.");
+        stopStream();
     }
 }

@@ -14,12 +14,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Permissions for NsdService -->
-    <uses-permission android:name="android.permission.INTERNET" />
-
     <!-- For ScreenStreamingService -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" android:minSdkVersion="34" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.CAPTURE_VIDEO_OUTPUT" tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"
@@ -30,19 +28,20 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.TVCompanion">
+
         <activity
-            android:name=".MainActivity"
+            android:name=".TempActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
         <activity
-            android:name=".MediaProjectionSupportActivity"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:name=".MediaProjectionPermissionActivity"
+            android:exported="false" />
 
         <!-- Receiver for when device starts -->
         <receiver android:name=".OnDeviceBootReceiver"
@@ -52,9 +51,10 @@
             </intent-filter>
         </receiver>
 
-        <!-- Companion Service -->
+        <!-- TV Companion Services -->
         <service android:name=".CompanionService" android:foregroundServiceType="specialUse" />
         <service android:name=".ScreenStreamingService" android:foregroundServiceType="mediaProjection" />
+        <service android:name=".NsdHelperService" />
     </application>
 
 </manifest>

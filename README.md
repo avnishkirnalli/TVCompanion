@@ -1,15 +1,19 @@
 # 📺 TV Companion
 
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/License-MIT-green)
 ![Platform](https://img.shields.io/badge/Platform-Android%20TV%20%2B%20Android-blue)
 ![Language](https://img.shields.io/badge/Language-Java-orange)
-![Status](https://img.shields.io/badge/Status-WIP%20but%20usable-yellow)
+![Status](https://img.shields.io/badge/Status-Working-lightgreen)
 
 TV Companion is a two-app system that enables rich remote control of Android TV devices from an Android phone, including URL launching, volume control, and live screen streaming over LAN.
 
 ## 🤔 Why TV Companion?
 
 The built-in `Google TV` app provides only a digital replica of an Android TV remote. I wanted an app that could do more, like launch URLs and stream the TV screen to my mobile phone directly.
+
+## ▶️ Demo
+
+Video to be inserted.
 
 ## How does it work?
 
@@ -42,26 +46,33 @@ Note: The Host app automatically starts up when the Android TV boots up.
 
 </details>
 
-## 🛠️ How to build
+## 📱 How to use?
+
+1. **Install Host App**: Sideload and install the `TVCompanion` app on your Android TV.
+2. **Grant Permissions**: Launch the app on your TV. You will be prompted to allow screen capture. Select "Start now" (and check "Don't ask again" for a smoother experience).
+3. **Install Controller**: Install the `TVCompanionController` app on your Android Phone.
+4. **Connect**: Ensure both devices are connected to the **same Wi-Fi network**.
+5. **Control**: Open the Controller app. It will automatically scan for your TV. Tap the device name to connect.
+   - Use the D-Pad for navigation.
+   - The TV screen will automatically mirror to your phone.
+   - Use the "Launch URL" feature to open websites directly on the TV.
+
+## 🛠️ How to build?
 
 The repo contains two folders (one for each app). They're nothing but Android Studio projects which can easily be compiled and packaged using Android Studio.
 
 Development Requirements:
 
-- Android Compile SDK Version: `35`
-- Android Min SDK Version: `21`
-- JDK: `JDK 17 or higher`
-- Android Gradle Plugin: `8.4.0 or higher`
-- Gradle: `8.6 or higher`
+- Android Compile SDK Version: `36`
+- Android Min SDK Version: `28` (TVCompanion) / `24` (TVCompanionController)
+- JDK: `JDK 11 or higher`
+- Android Gradle Plugin: `8.13.2`
+- Gradle: `8.13`
 
 TV Companion supports almost all Android TVs out there.
 But still remains untested on devices like `Amazon Fire TV`.
 
-## 📄 Planned Features
-
-- Add `Google TV` styled D-Pad controls to completely replace built-in `Google TV` app.
-
 ## ⚖️ LICENSE
 
 TV Companion is licensed under the MIT License. \
-**© Avnish Kirnalli 2025.**
+**© Avnish Kirnalli 2026.**
