@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller;
+package com.avnishkirnalli.tvcompanioncontroller;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -23,12 +23,12 @@ import androidx.core.widget.NestedScrollView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.avnishgamedev.tvcompanioncontroller.model.DiscoveredDevice;
-import com.avnishgamedev.tvcompanioncontroller.model.SavedUrl;
-import com.avnishgamedev.tvcompanioncontroller.network.NsdHelper;
-import com.avnishgamedev.tvcompanioncontroller.pairing.PairingClient;
-import com.avnishgamedev.tvcompanioncontroller.pairing.TvCompanion;
-import com.avnishgamedev.tvcompanioncontroller.ui.DeviceAdapter;
+import com.avnishkirnalli.tvcompanioncontroller.model.DiscoveredDevice;
+import com.avnishkirnalli.tvcompanioncontroller.model.SavedUrl;
+import com.avnishkirnalli.tvcompanioncontroller.network.NsdHelper;
+import com.avnishkirnalli.tvcompanioncontroller.pairing.PairingClient;
+import com.avnishkirnalli.tvcompanioncontroller.pairing.TvCompanion;
+import com.avnishkirnalli.tvcompanioncontroller.ui.DeviceAdapter;
 import com.google.android.material.appbar.MaterialToolbar;
 
 import org.bouncycastle.asn1.x500.X500Name;

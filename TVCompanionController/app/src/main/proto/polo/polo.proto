@@ -3,7 +3,7 @@ syntax = "proto2";
 package polo.wire.protobuf;
 
 option java_outer_classname = "PoloProto";
-option java_package = "com.avnishgamedev.tvcompanioncontroller.polo";
+option java_package = "com.avnishkirnalli.tvcompanioncontroller.polo";
 option optimize_for = LITE_RUNTIME;
 
 // OuterMessage - base outer message type used in the protocol.

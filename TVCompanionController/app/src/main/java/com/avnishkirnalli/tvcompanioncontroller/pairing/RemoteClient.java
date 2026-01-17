@@ -1,7 +1,7 @@
-package com.avnishgamedev.tvcompanioncontroller.pairing;
+package com.avnishkirnalli.tvcompanioncontroller.pairing;
 
-import com.avnishgamedev.tvcompanioncontroller.remote.RemoteMessageProto;
-import com.avnishgamedev.tvcompanioncontroller.remote.RemoteMessageProto.RemoteMessage;
+import com.avnishkirnalli.tvcompanioncontroller.remote.RemoteMessageProto;
+import com.avnishkirnalli.tvcompanioncontroller.remote.RemoteMessageProto.RemoteMessage;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -45,10 +45,10 @@ public class RemoteClient {
                         .setCode1(622)
                         .setDeviceInfo(RemoteMessageProto.RemoteDeviceInfo.newBuilder()
                                 .setModel("TVCompanion")
-                                .setVendor("AvnishGameDev")
+                                .setVendor("AvnishKirnalli")
                                 .setUnknown1(1)
                                 .setUnknown2("1")
-                                .setPackageName("com.avnishgamedev.tvcompanioncontroller")
+                                .setPackageName("com.avnishkirnalli.tvcompanioncontroller")
                                 .setAppVersion("1.0.0")
                                 .build())
                         .build())

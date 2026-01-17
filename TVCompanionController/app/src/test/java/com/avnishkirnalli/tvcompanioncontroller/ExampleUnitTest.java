@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller;
+package com.avnishkirnalli.tvcompanioncontroller;
 
 import org.junit.Test;
 

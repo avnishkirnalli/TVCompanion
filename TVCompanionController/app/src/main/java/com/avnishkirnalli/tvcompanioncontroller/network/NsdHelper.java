@@ -1,10 +1,10 @@
-package com.avnishgamedev.tvcompanioncontroller.network;
+package com.avnishkirnalli.tvcompanioncontroller.network;
 
 import android.content.Context;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 
-import com.avnishgamedev.tvcompanioncontroller.model.DiscoveredDevice;
+import com.avnishkirnalli.tvcompanioncontroller.model.DiscoveredDevice;
 
 public class NsdHelper {
 

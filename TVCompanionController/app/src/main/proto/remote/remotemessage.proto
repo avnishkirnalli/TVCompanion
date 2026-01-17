@@ -1,7 +1,7 @@
 syntax = "proto3";
 package remote;
 
-option java_package = "com.avnishgamedev.tvcompanioncontroller.remote";
+option java_package = "com.avnishkirnalli.tvcompanioncontroller.remote";
 option java_outer_classname = "RemoteMessageProto";
 
 message RemoteAppLinkLaunchRequest {

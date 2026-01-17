@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller;
+package com.avnishkirnalli.tvcompanioncontroller;
 
 import android.media.MediaCodec;
 import android.media.MediaFormat;

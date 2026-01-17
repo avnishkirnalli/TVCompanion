@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller.model;
+package com.avnishkirnalli.tvcompanioncontroller.model;
 
 public class SavedUrl {
     private String title;

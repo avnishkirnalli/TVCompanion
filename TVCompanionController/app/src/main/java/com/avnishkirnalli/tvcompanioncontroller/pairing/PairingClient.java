@@ -1,7 +1,7 @@
-package com.avnishgamedev.tvcompanioncontroller.pairing;
+package com.avnishkirnalli.tvcompanioncontroller.pairing;
 
-import com.avnishgamedev.tvcompanioncontroller.polo.PoloProto;
-import com.avnishgamedev.tvcompanioncontroller.polo.PoloProto.OuterMessage;
+import com.avnishkirnalli.tvcompanioncontroller.polo.PoloProto;
+import com.avnishkirnalli.tvcompanioncontroller.polo.PoloProto.OuterMessage;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -209,7 +209,7 @@ public class PairingClient {
     private byte[] calculateSecret(RSAPublicKey clientKey, RSAPublicKey serverKey, String code) throws Exception {
         if (code.length() < 6) throw new IllegalArgumentException("Code too short");
         String suffix = code.substring(2);
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        MessageDigest digest = MessageDigest.getInstance("SHA-26");
         digest.update(getHexBytes(clientKey.getModulus()));
         digest.update(getHexBytes(clientKey.getPublicExponent()));
         digest.update(getHexBytes(serverKey.getModulus()));

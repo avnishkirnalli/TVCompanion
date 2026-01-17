@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller.network;
+package com.avnishkirnalli.tvcompanioncontroller.network;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;

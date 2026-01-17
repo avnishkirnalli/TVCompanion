@@ -1,10 +1,10 @@
-package com.avnishgamedev.tvcompanioncontroller.pairing;
+package com.avnishkirnalli.tvcompanioncontroller.pairing;
 
 import android.content.Context;
-import com.avnishgamedev.tvcompanioncontroller.remote.RemoteMessageProto;
+
+import com.avnishkirnalli.tvcompanioncontroller.remote.RemoteMessageProto;
 
 import javax.net.ssl.SSLContext;
-import java.security.KeyStore;
 
 public class TvCompanion {
 

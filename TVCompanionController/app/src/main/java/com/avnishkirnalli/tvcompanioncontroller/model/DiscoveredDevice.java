@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller.model;
+package com.avnishkirnalli.tvcompanioncontroller.model;
 
 import android.net.nsd.NsdServiceInfo;
 

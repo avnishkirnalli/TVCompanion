@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller.ui;
+package com.avnishkirnalli.tvcompanioncontroller.ui;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,8 +8,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.avnishgamedev.tvcompanioncontroller.R;
-import com.avnishgamedev.tvcompanioncontroller.model.DiscoveredDevice;
+import com.avnishkirnalli.tvcompanioncontroller.R;
+import com.avnishkirnalli.tvcompanioncontroller.model.DiscoveredDevice;
 
 import java.util.ArrayList;
 import java.util.List;

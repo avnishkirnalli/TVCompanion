@@ -1,4 +1,4 @@
-package com.avnishgamedev.tvcompanioncontroller.pairing;
+package com.avnishkirnalli.tvcompanioncontroller.pairing;
 
 import android.content.Context;
 import java.io.FileInputStream;
