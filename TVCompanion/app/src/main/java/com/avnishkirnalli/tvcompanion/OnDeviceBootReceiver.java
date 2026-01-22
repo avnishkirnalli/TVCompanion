@@ -13,8 +13,8 @@ public class OnDeviceBootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            //Intent serviceIntent = new Intent(context, CompanionService.class);
-            //context.startForegroundService(serviceIntent);
+            Intent serviceIntent = new Intent(context, CompanionService.class);
+            context.startForegroundService(serviceIntent);
         }
     }
 }
